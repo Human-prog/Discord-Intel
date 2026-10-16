@@ -1,13 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "discord-project-intelligence"
 version = "0.1.0"
 description = "Private project-intelligence system for a personal homelab: Discord commands, read-only evidence-backed reporting, local Ollama analysis, and controlled research. Private by design."
 readme = "README.md"
 requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.7,<3",
+    "pydantic-settings>=2.2,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+]
 
 [project.urls]
 Repository = "https://github.com/Human-prog/Discord-Intel"
 
-# Dependencies, build system, and tooling (ruff, pytest, type checks) are added
-# in Phases 2-3 as required by the roadmap. This file intentionally declares
-# no dependencies yet.
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
