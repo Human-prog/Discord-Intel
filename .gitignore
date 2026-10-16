@@ -1,0 +1,47 @@
+# --- Secrets & credentials (never commit real values) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.token
+secrets/
+config/settings.yaml
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# --- Runtime data (never commit application data) ---
+data/
+backups/
+logs/
+*.log
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# --- Agent worktrees (future phases) ---
+worktrees/
+
+# --- IDE & OS noise ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+Desktop.ini
