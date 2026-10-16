@@ -1,6 +1,6 @@
 # Operations — Discord Project Intelligence
 
-**Status:** Phase 1 (2026-10-15). Nothing runs yet — no application code exists. This manual grows each phase: configuration (Phase 2), tests/CI (Phase 3), dashboard (Phase 7+), deployment (Phase 9), release procedures (Phase 20).
+**Status:** Phase 3 (2026-10-16). Nothing runs as a service yet — configuration, tests, and the quality pipeline exist. This manual grows each phase: dashboard (Phase 7+), deployment (Phase 9), release procedures (Phase 20).
 
 ## 1. Environments
 
@@ -68,27 +68,38 @@ git push -u origin main
 
 Option B (credential manager / PAT): create a fine-grained token scoped to only this repository with the minimum permissions needed to push, then push and let Git Credential Manager prompt for it. **Never paste tokens into chat, files, or command lines; never commit them.** Verify the remote is private after pushing.
 
-## 5. Development workflow (Phase 2+)
+## 5. Development workflow (Phase 3+)
 
 ```powershell
 python -m venv .venv                                      # once
 .venv\Scripts\python -m pip install -e ".[dev]"           # install (pins: requirements.lock)
-.venv\Scripts\python -m pytest                            # test suite
+.venv\Scripts\python -m pytest -q --cov                   # tests + coverage gate
+.venv\Scripts\ruff.exe check .                            # lint
+.venv\Scripts\ruff.exe format --check .                   # formatting
+.venv\Scripts\python -m mypy .                            # type check
+.venv\Scripts\pip-audit.exe --progress-spinner off        # dependency audit
+.venv\Scripts\python scripts\scan_secrets.py              # secret scan
 .venv\Scripts\python scripts\validate_config.py           # non-destructive config check
 ```
 
-On Linux, use `.venv/bin/python`. Configuration is environment-based with an optional `.env` file (copy `.env.example`); diagnostics never print secret values. There is still no long-running service to start — the dashboard arrives in Phase 7 and systemd units in Phase 9.
+On Linux, use `.venv/bin/python` and call `ruff` / `pip-audit` directly. All of
+these gates also run in CI (`.github/workflows/ci.yml`, `ubuntu-latest`,
+installing from `requirements.lock`; least-privilege `contents: read`). The
+first CI run happens after the first push (§4). Configuration is
+environment-based with an optional `.env` file (copy `.env.example`);
+diagnostics never print secret values. There is still no long-running service
+to start — the dashboard arrives in Phase 7 and systemd units in Phase 9.
 
 ## 6. Pending manual actions (tracked)
 
 - [ ] Push the initial commit to GitHub — owner (needs `gh auth login` or PAT; see §4)
 - [ ] When the homelab is online: run `scripts/discover_host.sh` and return the output — owner
 - [ ] Confirm homelab identity: is `192.168.1.187` = `homelab3013`? — owner
-- [x] Dependency/lock tooling decided (Phase 2): venv + editable install, third-party pins in `requirements.lock` (pip freeze). Revisit only if Linux CI reproducibility needs more (Phase 3).
+- [x] Dependency/lock tooling decided (Phase 2): venv + editable install, third-party pins in `requirements.lock` (pip freeze). Revisit only if Linux CI reproducibility needs more (Phase 3). Resolved in Phase 3: CI installs from `requirements.lock` plus `pip install --no-deps -e .`; no additional tooling needed.
 
 ## 7. Rollback procedures
 
-**Phases 1–2 (current):** Bootstrap rollback = delete the repository folder; nothing outside it was changed. Configuration rollback = `git revert` the Phase 2 commit(s) (code, tests, and docs are additive; no persisted data exists yet). The remote remains empty until pushed, so no remote rollback is needed. To revert a decision documented in `docs/ARCHITECTURE.md` §7, edit the decision log with owner approval.
+**Phases 1–3 (current):** Bootstrap rollback = delete the repository folder; nothing outside it was changed. Configuration rollback = `git revert` the Phase 2 commit(s) (code, tests, and docs are additive; no persisted data exists yet). Phase 3 rollback = `git revert` the Phase 3 commit(s): dev tooling (Ruff/mypy/pytest-cov/pip-audit in `pyproject.toml`), the secret scanner, CI workflow, and docs are additive — removing them restores the Phase 2 baseline and changes nothing at runtime. The remote remains empty until pushed, so no remote rollback is needed. To revert a decision documented in `docs/ARCHITECTURE.md` §7, edit the decision log with owner approval.
 
 Future phases add per-phase rollback sections here and in their phase reports.
 

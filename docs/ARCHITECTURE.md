@@ -1,6 +1,6 @@
 # Architecture — Discord Project Intelligence
 
-**Status:** Phase 1 (2026-10-15) — planned architecture only. No application modules exist yet; modules are created incrementally per the roadmap (`docs/ROADMAP.md`). This document is updated as phases complete. Requirements source: `docs/MASTER_SPEC.md`.
+**Status:** Phase 3 (2026-10-16) — planned architecture plus the verified foundation built so far (configuration, security utilities, quality pipeline). Modules are created incrementally per the roadmap (`docs/ROADMAP.md`). This document is updated as phases complete. Requirements source: `docs/MASTER_SPEC.md`.
 
 ## 1. Approach
 
@@ -61,13 +61,13 @@ discord-project-intelligence/
 | HTTP | httpx | Async, explicit timeouts, bounded retries |
 | Persistence | SQLite (async-safe access layer) | Versioned migrations; tested backups |
 | AI | Ollama HTTP API | Loopback only; schema-validated outputs |
-| Tests | pytest (+ async support) | Mocked externals; fixtures for malicious inputs |
-| Quality | Ruff, type checking, dependency audit, secret scanning | Enforced in CI (Phase 3) |
-| CI | GitHub Actions | Least-privilege workflow permissions |
+| Tests | pytest (+ async support) | Mocked externals; fixtures for malicious inputs; 100% branch coverage, `fail_under` gate at 95% |
+| Quality | Ruff (lint + format), mypy (pydantic plugin), pip-audit, in-repo secret scanner | All enforced in CI (`.github/workflows/ci.yml`, Phase 3) |
+| CI | GitHub Actions | Least-privilege workflow permissions (`contents: read`); installs from `requirements.lock` |
 | Deployment | systemd on Ubuntu | Docker only if it materially improves isolation |
 | Remote access | Tailscale Serve (never Funnel) | Dashboard only; preserve existing OpenCode route |
 
-Version-choice debt: dependency/lock tooling is undecided because `uv` is not installed on the dev machine; options (uv in an isolated environment vs. pip-tools/requirements lock vs. plain venv with pinned requirements) are evaluated in Phases 2–3. No global installs without owner approval.
+Version-choice debt resolved (Phases 2–3): venv + editable install with third-party pins in `requirements.lock` (pip freeze); CI installs exactly those pins plus `pip install --no-deps -e .`. No `uv` and no global installs required.
 
 ## 5. Process isolation model
 
@@ -102,6 +102,10 @@ Retrieved web/GitHub/Discord content and model output are untrusted data in ever
 | 2026-10-15 | Dependency tooling resolved: venv + editable install; third-party pins in `requirements.lock` (pip freeze output) | Standard library tooling without `uv`; Phase 3 CI will verify Linux reproducibility |
 | 2026-10-15 | Loopback-only enforcement for dashboard bind host and Ollama base URL is part of config validation | Makes the network boundary a tested property, not a convention |
 | 2026-10-15 | `diagnostics.py` provides secret-free summaries for the CLI now, health endpoints later | One redaction-safe code path reused by later phases |
+| 2026-10-16 | Secret scanning is an in-repo deterministic scanner (`security/secret_scan.py`, `scripts/scan_secrets.py`) instead of gitleaks | Offline, no extra toolchain, reports file/line/rule only (never matched values); tests enforce the repository and its fixtures stay scanner-clean; runs locally and in CI |
+| 2026-10-16 | Coverage gate `fail_under = 95` while actual coverage is 100% branch | Small buffer for platform-specific branches in later phases without weakening the gate |
+| 2026-10-16 | mypy requires full annotations in `src/` and `scripts/`; test functions may omit signatures (bodies still checked) | pytest fixture/parameter conventions; keeps type safety where it matters most |
+| 2026-10-16 | CI installs from `requirements.lock` + `pip install --no-deps -e .`; pip upgraded before audit | Reproducible installs without resolver drift; pip-audit reports only real dependency findings |
 
 ## 8. Trust boundaries (summary; expanded in `docs/THREAT_MODEL.md`, Phase 5)
 
