@@ -32,7 +32,6 @@ discord-project-intelligence/
 ├── README.md
 ├── pyproject.toml
 ├── .gitignore, .gitattributes, .env.example
-├── config/            # settings example(s), non-secret
 ├── src/project_intelligence/
 │   ├── main.py, config.py, logging_config.py, health.py
 │   ├── bot/           # Discord client, commands, authorization glue, channel router
@@ -99,6 +98,10 @@ Retrieved web/GitHub/Discord content and model output are untrusted data in ever
 | 2026-10-15 | GitHub remote is `Human-prog/Discord-Intel` (not `discord-project-intelligence`) | Owner-created private repo; working name retained for docs |
 | 2026-10-15 | Docker not assumed on the homelab | Host offline at bootstrap; systemd-first deployment per spec; Docker only if it materially improves isolation (Phase 9 inspection) |
 | 2026-10-15 | Dependency/lock tooling deferred to Phases 2–3 | `uv` absent on dev machine; choose isolated tooling without global installs |
+| 2026-10-15 | Configuration is environment-first (env vars + optional `.env`); no YAML settings file | Single validation path and no extra dependency; `.env` is the protected-file mechanism; the `config/` example file from the spec tree is intentionally omitted |
+| 2026-10-15 | Dependency tooling resolved: venv + editable install; third-party pins in `requirements.lock` (pip freeze output) | Standard library tooling without `uv`; Phase 3 CI will verify Linux reproducibility |
+| 2026-10-15 | Loopback-only enforcement for dashboard bind host and Ollama base URL is part of config validation | Makes the network boundary a tested property, not a convention |
+| 2026-10-15 | `diagnostics.py` provides secret-free summaries for the CLI now, health endpoints later | One redaction-safe code path reused by later phases |
 
 ## 8. Trust boundaries (summary; expanded in `docs/THREAT_MODEL.md`, Phase 5)
 

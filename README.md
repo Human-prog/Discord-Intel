@@ -2,8 +2,8 @@
 
 Private, self-hosted project-intelligence system for a personal Ubuntu homelab. Planned capabilities: Discord slash commands, a private mobile-friendly read-only dashboard, read-only GitHub evidence, local Ollama analysis, and a controlled research pipeline — with strict authorization, evidence-backed reporting, and no public network exposure.
 
-> **Current status: Phase 1 of 20 complete — repository bootstrap only.**
-> No application code exists yet. Nothing here runs, connects to Discord or GitHub, or serves a dashboard. Features described in the documentation are planned, not implemented.
+> **Current status: Phase 2 of 20 complete — configuration foundation.**
+> Typed, fail-closed configuration with secure defaults, redaction helpers, and a non-destructive diagnostics command — all unit-tested. The system does not connect to Discord or GitHub, run background jobs, or serve a dashboard yet.
 
 ## Repository identity
 
@@ -42,5 +42,19 @@ Private, self-hosted project-intelligence system for a personal Ubuntu homelab. 
 
 ## What exists today
 
-- Repository scaffold, documentation set, and a read-only host-discovery script.
-- Nothing to install, build, or run yet. Phase 2 adds validated configuration and secure defaults.
+- Repository scaffold and documentation set.
+- Typed configuration (`src/project_intelligence/config.py`) with fail-closed validation: loopback-only dashboard and Ollama, deny-by-default allowlists, production hardening.
+- Redaction helpers (`src/project_intelligence/security/redaction.py`) and a non-destructive configuration check (`scripts/validate_config.py`).
+- Unit tests (59) covering valid, invalid, missing, and conflicting settings.
+- Read-only host-discovery script (`scripts/discover_host.sh`) for the homelab.
+
+## Development setup (Phase 2+)
+
+```powershell
+python -m venv .venv
+.venv\Scripts\python -m pip install -e ".[dev]"     # versions pinned by requirements.lock
+.venv\Scripts\python -m pytest                      # run the test suite
+.venv\Scripts\python scripts\validate_config.py     # non-destructive configuration check
+```
+
+On Linux, use `.venv/bin/python` instead. Configuration is environment-based; copy `.env.example` to `.env` (git-ignored) for local overrides. Real secrets never belong in the repository, and diagnostics never print them.

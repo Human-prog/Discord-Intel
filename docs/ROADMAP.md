@@ -9,7 +9,7 @@
 | # | Phase | Status | Report | Notes |
 |---|-------|--------|--------|-------|
 | 1 | Repository bootstrap & environment discovery | ✅ PASS (host discovery deferred) | `phases/PHASE_01.md` | Bootstrap complete 2026-10-15. Homelab intentionally offline; read-only discovery script ready. |
-| 2 | Configuration, schemas, secure defaults | ⬜ Not started | — | Next phase. No host dependency. |
+| 2 | Configuration, schemas, secure defaults | ✅ PASS | `phases/PHASE_02.md` | Typed settings, fail-closed validation, redaction, diagnostics; 59 tests passing (2026-10-15). |
 | 3 | Testing, CI, code quality | ⬜ Not started | — | — |
 | 4 | Storage & data migrations | ⬜ Not started | — | — |
 | 5 | Authentication, authorization, threat model | ⬜ Not started | — | Gate: no Discord commands / dashboard exposure until authz tests pass. |
@@ -32,7 +32,7 @@
 ## Phase notes and gates
 
 1. **Repository bootstrap & environment discovery** — Local repo established, documentation set, remote configured (push pending owner auth), development machine inventoried, homelab discovery deferred (host offline; script `scripts/discover_host.sh` provided). Gate: no production changes — met.
-2. **Configuration, schemas, secure defaults** — Typed settings, dev/test/prod modes, fail-safe validation, redaction, deny-by-default. Gate: invalid config fails safely; no secrets in diagnostics; unit tests for valid/invalid/missing/conflicting settings.
+2. **Configuration, schemas, secure defaults** — ✅ Environment-based typed settings (`pydantic-settings`), development/testing/production modes, loopback enforcement (dashboard + Ollama), deny-by-default allowlists, Discord fail-closed owner rule, production hardening (absolute paths, session secret file, placeholder rejection), redaction helpers, non-destructive diagnostics (`scripts/validate_config.py`). Gate met: invalid config exits 2 without printing secrets; 59 unit tests cover valid/invalid/missing/conflicting settings. Report: `phases/PHASE_02.md`.
 3. **Testing, CI, code quality** — pytest + fixtures, Ruff, type checks, lockfile, GitHub Actions, dependency audit, secret scanning. Gate: CI runs without production credentials; failures block.
 4. **Storage & data migrations** — SQLite layer, versioned migrations, entities per MASTER_SPEC §7, transaction/concurrency tests, backup/restore basics. Gate: fresh init + migrations + rollback tests pass.
 5. **Authentication, authorization, threat model** — Central authN/authZ, roles/capabilities (owner-only start), correlation IDs, audit events, redaction, rate limits, `docs/THREAT_MODEL.md`. Gate: every protected action passes central checks; unauthorized = denied; **no Discord commands or dashboard exposure before this gate passes**.

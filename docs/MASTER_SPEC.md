@@ -217,25 +217,29 @@ Rules: stable primary keys; foreign keys, uniqueness constraints, indexes, times
 
 ---
 
-## 9. Configuration inventory (planned variable names)
+## 9. Configuration inventory (implemented in Phase 2)
+
+Authoritative list of names: `.env.example`; validated by `src/project_intelligence/config.py`.
 
 ```
 APP_ENV, APP_LOG_LEVEL, DATA_DIR, DATABASE_PATH
 DISCORD_BOT_TOKEN, DISCORD_OWNER_USER_IDS, DISCORD_ALLOWED_GUILD_IDS,
 DISCORD_ALLOWED_CHANNEL_IDS, DISCORD_ALLOW_DMS
-GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_FILE, GITHUB_INSTALLATION_ID,
+GITHUB_MODE, GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_FILE, GITHUB_INSTALLATION_ID,
 GITHUB_ALLOWED_REPOSITORIES, GITHUB_READ_ONLY_TOKEN
 OLLAMA_BASE_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT_SECONDS
 RESEARCH_PROVIDER, RESEARCH_API_KEY, RESEARCH_ALLOWED_DOMAINS,
 RESEARCH_MAX_RESULTS, RESEARCH_MAX_RESPONSE_BYTES
 DASHBOARD_BIND_HOST, DASHBOARD_BIND_PORT, DASHBOARD_SESSION_SECRET_FILE
-OPENCODE_ENABLED, OPENCODE_COMMAND, OPENCODE_ALLOWED_WORKTREES,
-OPENCODE_MAX_RUNTIME_SECONDS
+PROJECT_ALLOWED_ROOTS
 SCHEDULER_ENABLED, MAX_CONCURRENT_JOBS, MAX_RESEARCH_JOBS_PER_USER,
 MAX_JOB_RUNTIME_SECONDS, AUDIT_RETENTION_DAYS
+HTTP_TIMEOUT_SECONDS, HTTP_MAX_RETRIES
+OPENCODE_ENABLED, OPENCODE_COMMAND, OPENCODE_ALLOWED_WORKTREES,
+OPENCODE_MAX_RUNTIME_SECONDS
 ```
 
-Rules: no real secret values in the repository; explicit secure defaults for non-secrets; dangerous integrations require explicit enablement; missing allowlists = deny-all; invalid production configuration = startup failure; configuration never exposed via dashboard/Discord; `OPENCODE_ENABLED=false` by default; no cloud-model fallback for private context by default.
+Rules (enforced by validation and tests): no real secret values in the repository; explicit secure defaults for non-secrets; dangerous integrations require explicit enablement; missing allowlists = deny-all; dashboard and Ollama restricted to loopback addresses; a Discord token without owner IDs is refused; invalid production configuration (relative paths, placeholder secrets, missing session-secret file reference) = startup failure; configuration never exposed via dashboard/Discord; `OPENCODE_ENABLED=false` by default; no cloud-model fallback for private context by default.
 
 ---
 

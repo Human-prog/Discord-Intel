@@ -68,20 +68,27 @@ git push -u origin main
 
 Option B (credential manager / PAT): create a fine-grained token scoped to only this repository with the minimum permissions needed to push, then push and let Git Credential Manager prompt for it. **Never paste tokens into chat, files, or command lines; never commit them.** Verify the remote is private after pushing.
 
-## 5. Running the application
+## 5. Development workflow (Phase 2+)
 
-Not applicable yet. Phase 2 adds configuration handling; Phase 7 adds the dashboard; Phase 9 adds systemd services. There is intentionally nothing to install or start at Phase 1.
+```powershell
+python -m venv .venv                                      # once
+.venv\Scripts\python -m pip install -e ".[dev]"           # install (pins: requirements.lock)
+.venv\Scripts\python -m pytest                            # test suite
+.venv\Scripts\python scripts\validate_config.py           # non-destructive config check
+```
+
+On Linux, use `.venv/bin/python`. Configuration is environment-based with an optional `.env` file (copy `.env.example`); diagnostics never print secret values. There is still no long-running service to start — the dashboard arrives in Phase 7 and systemd units in Phase 9.
 
 ## 6. Pending manual actions (tracked)
 
 - [ ] Push the initial commit to GitHub — owner (needs `gh auth login` or PAT; see §4)
 - [ ] When the homelab is online: run `scripts/discover_host.sh` and return the output — owner
 - [ ] Confirm homelab identity: is `192.168.1.187` = `homelab3013`? — owner
-- [ ] Decide dependency/lock tooling preference (uv vs. pip-tools vs. pip+venv) — owner input requested in Phase 2
+- [x] Dependency/lock tooling decided (Phase 2): venv + editable install, third-party pins in `requirements.lock` (pip freeze). Revisit only if Linux CI reproducibility needs more (Phase 3).
 
 ## 7. Rollback procedures
 
-**Phase 1 (current):** Bootstrap rollback = delete the repository folder; nothing outside it was changed (no services, no network, no host state). The remote remains empty until pushed, so no remote rollback is needed. To revert a decision documented in `docs/ARCHITECTURE.md` §7, edit the decision log with owner approval.
+**Phases 1–2 (current):** Bootstrap rollback = delete the repository folder; nothing outside it was changed. Configuration rollback = `git revert` the Phase 2 commit(s) (code, tests, and docs are additive; no persisted data exists yet). The remote remains empty until pushed, so no remote rollback is needed. To revert a decision documented in `docs/ARCHITECTURE.md` §7, edit the decision log with owner approval.
 
 Future phases add per-phase rollback sections here and in their phase reports.
 
