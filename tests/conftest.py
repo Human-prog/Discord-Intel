@@ -8,13 +8,15 @@ Tests are isolated from the machine environment:
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 
 from project_intelligence.config import Settings, env_var_names
 
 
 @pytest.fixture(autouse=True)
-def _isolated_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def _isolated_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     for name in env_var_names():
         monkeypatch.delenv(name, raising=False)
     yield

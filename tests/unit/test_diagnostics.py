@@ -97,3 +97,15 @@ def test_runtime_prereq_missing_data_dir_is_info_not_error(make_settings, tmp_pa
     checks = check_runtime_prerequisites(settings)
     assert any(level == "info" for level, _ in checks)
     assert not any(level == "error" for level, _ in checks)
+
+
+def test_runtime_prereq_existing_data_dir_has_no_warning(make_settings, tmp_path):
+    settings = make_settings(data_dir=str(tmp_path))
+    checks = check_runtime_prerequisites(settings)
+    assert not any("does not exist yet" in message for _, message in checks)
+
+
+def test_runtime_prereq_missing_session_secret_file_is_error(make_settings, tmp_path):
+    settings = make_settings(dashboard_session_secret_file=str(tmp_path / "missing-secret"))
+    errors = [m for level, m in check_runtime_prerequisites(settings) if level == "error"]
+    assert any("session secret file not found" in message for message in errors)

@@ -9,7 +9,8 @@ in the first place.
 from __future__ import annotations
 
 import re
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 REDACTED = "***REDACTED***"
 

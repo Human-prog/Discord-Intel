@@ -174,9 +174,7 @@ def check_runtime_prerequisites(settings: Settings) -> list[tuple[str, str]]:
     if settings.github_mode == "app":
         key_file = settings.github_app_private_key_file
         if key_file is None or not Path(key_file).exists():
-            checks.append(
-                ("error", f"GitHub App private key file not found: {key_file}")
-            )
+            checks.append(("error", f"GitHub App private key file not found: {key_file}"))
 
     if (
         settings.dashboard_session_secret_file is not None
@@ -190,13 +188,16 @@ def check_runtime_prerequisites(settings: Settings) -> list[tuple[str, str]]:
             )
         )
 
-    if settings.opencode_enabled and settings.opencode_command:
-        if shutil.which(settings.opencode_command) is None:
-            checks.append(
-                (
-                    "error",
-                    f"OpenCode command not found on PATH: {settings.opencode_command}",
-                )
+    if (
+        settings.opencode_enabled
+        and settings.opencode_command
+        and shutil.which(settings.opencode_command) is None
+    ):
+        checks.append(
+            (
+                "error",
+                f"OpenCode command not found on PATH: {settings.opencode_command}",
             )
+        )
 
     return checks

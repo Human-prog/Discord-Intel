@@ -36,9 +36,7 @@ GITHUB_MODES = ("disabled", "app", "token")
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 _REPO_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
-_DOMAIN_RE = re.compile(
-    r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$"
-)
+_DOMAIN_RE = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$")
 
 # Only enforced in production; the offending value is never echoed.
 _PLACEHOLDER_MARKERS = (
@@ -248,8 +246,7 @@ class Settings(BaseSettings):
             name = str(item).strip()
             if not _REPO_NAME_RE.match(name):
                 raise ValueError(
-                    "each repository must look like 'owner/repo' "
-                    "(no URLs, no extra path segments)"
+                    "each repository must look like 'owner/repo' (no URLs, no extra path segments)"
                 )
             result.append(name)
         return result
@@ -318,7 +315,7 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ #
 
     @model_validator(mode="after")
-    def _finalize_and_check(self) -> "Settings":
+    def _finalize_and_check(self) -> Settings:
         # Derive the database path when unset.
         if self.database_path is None:
             self.database_path = Path(self.data_dir) / "db.sqlite3"

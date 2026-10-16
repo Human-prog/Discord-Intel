@@ -1,1 +1,5 @@
-"""Security utilities (redaction now; authorization, audit, rate limits, URL policy in later phases)."""
+"""Security utilities.
+
+Redaction and secret scanning live here now; authorization, audit,
+rate limiting, and URL policy arrive in later phases.
+"""

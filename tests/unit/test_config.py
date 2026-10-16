@@ -15,7 +15,6 @@ from pydantic import ValidationError
 
 from project_intelligence.config import (
     ConfigError,
-    Settings,
     env_var_names,
     load_settings,
 )
@@ -81,6 +80,34 @@ def test_paths_parsed_from_semicolon_and_comma(make_settings):
     assert s.project_allowed_roots == [Path("C:/a"), Path("C:/b"), Path("C:/c")]
 
 
+def test_data_dir_blank_rejected(make_settings):
+    with pytest.raises(ValidationError):
+        make_settings(data_dir="   ")
+
+
+def test_id_list_none_becomes_empty(make_settings):
+    s = make_settings(discord_owner_user_ids=None)
+    assert s.discord_owner_user_ids == []
+
+
+def test_id_list_rejects_zero_and_negative(make_settings):
+    with pytest.raises(ValidationError):
+        make_settings(discord_owner_user_ids=[0])
+    with pytest.raises(ValidationError):
+        make_settings(discord_owner_user_ids="-3")
+
+
+def test_list_fields_reject_wrong_types(make_settings):
+    with pytest.raises(ValidationError):
+        make_settings(discord_owner_user_ids=123)
+    with pytest.raises(ValidationError):
+        make_settings(github_allowed_repositories=123)
+    with pytest.raises(ValidationError):
+        make_settings(research_allowed_domains=123)
+    with pytest.raises(ValidationError):
+        make_settings(project_allowed_roots=123)
+
+
 # --------------------------------------------------------------------- #
 # discord fail-closed rules
 # --------------------------------------------------------------------- #
@@ -138,9 +165,7 @@ def test_github_repos_reject_invalid_formats(make_settings, bad_value):
 
 
 def test_github_repos_accept_valid_formats(make_settings):
-    s = make_settings(
-        github_allowed_repositories="Human-prog/Discord-Intel,owner2/repo.name"
-    )
+    s = make_settings(github_allowed_repositories="Human-prog/Discord-Intel,owner2/repo.name")
     assert s.github_allowed_repositories == ["Human-prog/Discord-Intel", "owner2/repo.name"]
 
 
@@ -264,6 +289,12 @@ def test_empty_strings_treated_as_unset(make_settings):
     assert s.database_path == Path("data") / "db.sqlite3"
 
 
+def test_explicit_database_path_is_kept(make_settings, tmp_path):
+    custom = tmp_path / "custom.sqlite3"
+    s = make_settings(data_dir=str(tmp_path), database_path=str(custom))
+    assert s.database_path == custom
+
+
 def test_opencode_disabled_by_default_and_requires_config(make_settings, tmp_path):
     assert make_settings().opencode_enabled is False
     with pytest.raises(ValidationError):
@@ -290,6 +321,17 @@ def test_production_rejects_relative_data_dir(make_settings, tmp_path):
             data_dir="data",
             dashboard_session_secret_file=str(tmp_path / "secret"),
         )
+
+
+def test_production_rejects_relative_database_path(make_settings, tmp_path):
+    with pytest.raises(ValidationError) as excinfo:
+        make_settings(
+            app_env="production",
+            data_dir=str(tmp_path),
+            database_path="relative/db.sqlite3",
+            dashboard_session_secret_file=str(tmp_path / "secret"),
+        )
+    assert "DATABASE_PATH" in str(excinfo.value)
 
 
 def test_production_requires_session_secret_file(make_settings, tmp_path):
