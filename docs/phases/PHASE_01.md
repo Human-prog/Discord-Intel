@@ -1,7 +1,7 @@
 # Phase 1 — Repository Bootstrap and Environment Discovery
 
 **Status: PASS (repository bootstrap) — host discovery: PARTIAL, deferred by owner (homelab intentionally powered off).**
-**Date:** 2026-10-15 · **Branch:** `main` · **Phase commits:** `<COMMIT1_PENDING>` (bootstrap), plus a follow-up docs commit recording this hash.
+**Date:** 2026-10-15 · **Branch:** `main` · **Phase commits:** `26d5587` (bootstrap), plus a follow-up docs commit recording this hash.
 
 ## Implementation summary
 
@@ -48,7 +48,7 @@ Application code; configuration schema (Phase 2); tests/CI (Phase 3); storage (P
 | `git init -b main` | Initialized; folder-empty guard honored |
 | Secret-pattern scan (8 credential regexes over all files, `.git` excluded) | CLEAN — no matches |
 | `git status --short --branch` review | Only intended files present |
-| Commits | `<COMMIT1_PENDING>` (bootstrap); follow-up docs commit records the hash |
+| Commits | `26d5587` (bootstrap); follow-up docs commit records the hash |
 
 ## Tests
 
