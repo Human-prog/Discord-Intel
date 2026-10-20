@@ -14,18 +14,16 @@ DiscordBot and command functions are not available.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any, cast
 
 from project_intelligence.config import Settings, load_settings
 from project_intelligence.security import (
-    AuthContext,
-    authenticate_from_interaction,
-    require_authentication,
-    AuthorizationChecker,
-    make_checker,
-    rate_limiter,
+    DEFAULT_RATE_LIMITS,
     AuthError,
     AuthorizationError,
+    authenticate_from_interaction,
+    make_checker,
+    rate_limiter,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,6 +36,7 @@ try:
     import discord
     from discord import app_commands
     from discord.ext import commands
+
     DISCORD_AVAILABLE = True
 except ImportError:
     DISCORD_AVAILABLE = False
@@ -93,9 +92,10 @@ if DISCORD_AVAILABLE:
                 return
 
             interaction.extras = {"auth_ctx": auth_ctx}
-            await super().on_interaction(interaction)
+            # discord.py dispatches command callbacks independently; there is
+            # no base on_interaction handler to delegate to.
 
-        async def on_command_error(self, ctx, error) -> None:
+        async def on_command_error(self, ctx: commands.Context[Any], error: Exception) -> None:
             logger.warning("Command error: %s", error)
 else:
     DiscordBot = None  # type: ignore[assignment,misc]
@@ -106,11 +106,12 @@ else:
 # ---------------------------------------------------------------------------
 
 if DISCORD_AVAILABLE:
+
     @app_commands.command(name="help", description="Show available commands and permissions")
     async def help_command(interaction: discord.Interaction) -> None:
         """Show available commands and permissions."""
         auth_ctx = interaction.extras.get("auth_ctx") if hasattr(interaction, "extras") else None
-        settings = interaction.client.settings
+        settings = cast(Settings, getattr(interaction.client, "settings", None))
 
         if auth_ctx is None:
             await interaction.response.send_message("Authentication required.", ephemeral=True)
@@ -130,25 +131,25 @@ if DISCORD_AVAILABLE:
             )
             return
 
-        help_text = """**Discord Project Intelligence — Available Commands**
+        help_text = """**Discord Project Intelligence - Available Commands**
 
 **General:**
-- `/help` — Show this help message
-- `/status` — Application and integration status
+- `/help` - Show this help message
+- `/status` - Application and integration status
 
 **Project (authorized users):**
-- `/next` — Evidence-backed suggested next actions
-- `/roadmap` — View project milestones and progress
-- `/blocker` — View or record project blockers
-- `/health` — Inspect project health snapshots
+- `/next` - Evidence-backed suggested next actions
+- `/roadmap` - View project milestones and progress
+- `/blocker` - View or record project blockers
+- `/health` - Inspect project health snapshots
 
 **Owner only:**
-- `/connect-project` — Map an approved Discord context to a project
-- `/note` — Save a project note
-- `/research` — Start or retrieve an approved research job
-- `/discover` — Discover relevant sources or project opportunities
-- `/review` — Review project evidence or research results
-- `/report` — Generate an evidence-backed project report
+- `/connect-project` - Map an approved Discord context to a project
+- `/note` - Save a project note
+- `/research` - Start or retrieve an approved research job
+- `/discover` - Discover relevant sources or project opportunities
+- `/review` - Review project evidence or research results
+- `/report` - Generate an evidence-backed project report
 
 All replies are private (ephemeral) by default.
 """
@@ -158,7 +159,7 @@ All replies are private (ephemeral) by default.
     async def status_command(interaction: discord.Interaction) -> None:
         """Overall application and integration status."""
         auth_ctx = interaction.extras.get("auth_ctx") if hasattr(interaction, "extras") else None
-        settings = interaction.client.settings
+        settings = cast(Settings, getattr(interaction.client, "settings", None))
 
         if auth_ctx is None:
             await interaction.response.send_message("Authentication required.", ephemeral=True)
@@ -178,31 +179,33 @@ All replies are private (ephemeral) by default.
             )
             return
 
+        per_user_calls, per_user_window = DEFAULT_RATE_LIMITS["command_per_user"]
         status_text = f"""**Application Status**
 
 **Environment:** {settings.app_env}
 **Log level:** {settings.app_log_level}
 **Database:** {settings.database_path}
 **Dashboard:** {settings.dashboard_bind_host}:{settings.dashboard_bind_port} (loopback only)
-**Ollama:** {settings.ollama_base_url} (model: {settings.ollama_model or 'unset'})
+**Ollama:** {settings.ollama_base_url} (model: {settings.ollama_model or "unset"})
 **GitHub:** {settings.github_mode}
-**Research:** {settings.research_provider or 'disabled'}
-**OpenCode:** {'enabled' if settings.opencode_enabled else 'disabled'} (default: disabled)
+**Research:** {settings.research_provider or "disabled"}
+**OpenCode:** {"enabled" if settings.opencode_enabled else "disabled"} (default: disabled)
 
 **Authorization:** Owner IDs: {len(settings.discord_owner_user_ids)} configured
-**Rate limits:** Per-user {DEFAULT_RATE_LIMITS['command_per_user'][0]}/{DEFAULT_RATE_LIMITS['command_per_user'][1]}s
+**Rate limits:** {per_user_calls} calls / {per_user_window}s per user
 """
         await interaction.response.send_message(status_text, ephemeral=True)
 else:
-    help_command = None
-    status_command = None
+    help_command = None  # type: ignore[assignment]
+    status_command = None  # type: ignore[assignment]
 
 
 # ---------------------------------------------------------------------------
 # Bot factory
 # ---------------------------------------------------------------------------
 
-def create_bot(settings: Optional[Settings] = None) -> "DiscordBot":
+
+def create_bot(settings: Settings | None = None) -> DiscordBot:
     """Create and configure a DiscordBot instance."""
     if settings is None:
         settings = load_settings()
@@ -218,6 +221,7 @@ def create_bot(settings: Optional[Settings] = None) -> "DiscordBot":
 # Offline test mode
 # ---------------------------------------------------------------------------
 
+
 class MockInteraction:
     """Mock Discord interaction for offline testing."""
 
@@ -225,14 +229,18 @@ class MockInteraction:
         self.user = type("User", (), {"id": user_id})()
         self.guild_id = guild_id
         self.channel_id = channel_id
-        self.response = type("Response", (), {
-            "send_message": lambda self, msg, ephemeral=True: None,
-        })()
+        self.response = type(
+            "Response",
+            (),
+            {
+                "send_message": lambda self, msg, ephemeral=True: None,
+            },
+        )()
         self.client = None
         self.extras: dict[str, Any] = {}
 
 
-def create_test_bot(settings: Optional[Settings] = None) -> "DiscordBot":
+def create_test_bot(settings: Settings | None = None) -> DiscordBot:
     """Create a bot for offline testing (no live Discord connection)."""
     if settings is None:
         settings = load_settings(env_file=None)

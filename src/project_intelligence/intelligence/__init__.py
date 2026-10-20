@@ -1,4 +1,4 @@
-"""Intelligence module for Phase 13 — Evidence and Project Intelligence Engine.
+"""Intelligence module for Phase 13 - Evidence and Project Intelligence Engine.
 
 Provides evidence normalization, claim tracking, facts vs inferences,
 stale/conflict detection, and project summaries.
@@ -6,10 +6,10 @@ stale/conflict detection, and project summaries.
 
 from __future__ import annotations
 
-from .evidence_engine import ProjectIntelligence, EvidenceClaim, create_intelligence  # noqa: F401
+from .evidence_engine import EvidenceClaim, ProjectIntelligence, create_intelligence
 
 __all__ = [
-    "ProjectIntelligence",
     "EvidenceClaim",
+    "ProjectIntelligence",
     "create_intelligence",
 ]

@@ -8,14 +8,14 @@ tool-execution access.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from project_intelligence.config import Settings, load_settings
-
 
 # ---------------------------------------------------------------------------
 # OpenCode adapter interface
 # ---------------------------------------------------------------------------
+
 
 class OpenCodeAdapter:
     """Adapter interface for OpenCode integration (read-only)."""
@@ -42,7 +42,7 @@ class OpenCodeAdapter:
         # Placeholder: actual OpenCode API call would go here
         return None
 
-    def list_sessions(self, project_id: Optional[str] = None) -> list[dict[str, Any]]:
+    def list_sessions(self, project_id: str | None = None) -> list[dict[str, Any]]:
         """List read-only sessions (disabled by default)."""
         if not self.is_enabled():
             return []
@@ -52,7 +52,7 @@ class OpenCodeAdapter:
 class MockOpenCodeAdapter(OpenCodeAdapter):
     """Mock adapter for testing (no network requests)."""
 
-    def __init__(self, settings: Optional[Settings] = None) -> None:
+    def __init__(self, settings: Settings | None = None) -> None:
         super().__init__(settings or load_settings())
         self._sessions: list[dict[str, Any]] = []
         self._projects: list[dict[str, Any]] = []
@@ -81,7 +81,7 @@ class MockOpenCodeAdapter(OpenCodeAdapter):
                 return project
         return None
 
-    def list_sessions(self, project_id: Optional[str] = None) -> list[dict[str, Any]]:
+    def list_sessions(self, project_id: str | None = None) -> list[dict[str, Any]]:
         if not self.is_enabled():
             return []
         if project_id:
@@ -89,14 +89,14 @@ class MockOpenCodeAdapter(OpenCodeAdapter):
         return self._sessions
 
 
-def create_opencode_adapter(settings: Optional[Settings] = None) -> OpenCodeAdapter:
+def create_opencode_adapter(settings: Settings | None = None) -> OpenCodeAdapter:
     """Factory for OpenCodeAdapter."""
     if settings is None:
         settings = load_settings()
     return OpenCodeAdapter(settings)
 
 
-def create_mock_adapter(settings: Optional[Settings] = None) -> MockOpenCodeAdapter:
+def create_mock_adapter(settings: Settings | None = None) -> MockOpenCodeAdapter:
     """Factory for MockOpenCodeAdapter (testing only)."""
     if settings is None:
         settings = load_settings()

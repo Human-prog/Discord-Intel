@@ -10,27 +10,26 @@ from __future__ import annotations
 
 import hashlib
 import ipaddress
-import re
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import urlparse
 
 from project_intelligence.config import Settings, load_settings
-
 
 # ---------------------------------------------------------------------------
 # URL safety validation
 # ---------------------------------------------------------------------------
 
-BLOCKED_HOSTS = frozenset({
-    "localhost",
-    "127.0.0.1",
-    "::1",
-    "0.0.0.0",
-    "169.254.169.254",  # AWS metadata
-    "metadata.google.internal",  # GCP metadata
-    "169.254.169.254",  # Azure metadata
-})
+BLOCKED_HOSTS = frozenset(
+    {
+        "localhost",
+        "127.0.0.1",
+        "::1",
+        "0.0.0.0",  # noqa: S104 - blocklist entry, not a bind address
+        "169.254.169.254",  # AWS/GCP/Azure metadata endpoint
+        "metadata.google.internal",  # GCP metadata
+    }
+)
 
 
 def is_safe_url(url: str) -> bool:
@@ -79,6 +78,7 @@ def validate_redirect(url: str, redirect_url: str) -> bool:
 # Research source model
 # ---------------------------------------------------------------------------
 
+
 class ResearchSource:
     """A research source with metadata."""
 
@@ -101,10 +101,11 @@ class ResearchSource:
 # Research pipeline
 # ---------------------------------------------------------------------------
 
+
 class ResearchPipeline:
     """Controlled research pipeline with SSRF protections."""
 
-    def __init__(self, settings: Optional[Settings] = None) -> None:
+    def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or load_settings()
         self.allowed_domains = self.settings.research_allowed_domains
         self.max_results = self.settings.research_max_results
@@ -148,7 +149,7 @@ class ResearchPipeline:
             canonical_url=url,
             source_type="web",
             content_hash=content_hash,
-            retrieved_at_utc=datetime.now(timezone.utc).isoformat() + "Z",
+            retrieved_at_utc=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
 
     def deduplicate_sources(self, sources: list[ResearchSource]) -> list[ResearchSource]:
@@ -179,12 +180,12 @@ class ResearchPipeline:
                 for s in sources
             ],
             "citation_count": len(sources),
-            "generated_at_utc": datetime.now(timezone.utc).isoformat() + "Z",
+            "generated_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "status": "completed" if sources else "no_sources",
         }
 
 
-def create_research_pipeline(settings: Optional[Settings] = None) -> ResearchPipeline:
+def create_research_pipeline(settings: Settings | None = None) -> ResearchPipeline:
     """Factory for ResearchPipeline."""
     if settings is None:
         settings = load_settings()

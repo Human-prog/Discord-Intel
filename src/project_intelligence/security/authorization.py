@@ -9,8 +9,6 @@ All checks use IDs (not display names) as authorization identifiers.
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, Tuple
-
 from ..config import Settings
 from ..security.authentication import AuthContext, AuthError
 
@@ -43,8 +41,8 @@ class AuthorizationChecker:
     def check_user_guild_channel(
         self,
         *,
-        required_guild_ids: Optional[List[int]] = None,
-        required_channel_ids: Optional[List[int]] = None,
+        required_guild_ids: list[int] | None = None,
+        required_channel_ids: list[int] | None = None,
     ) -> None:
         """Ensure the user's guild and channel are in the allowed whitelists.
 
@@ -60,32 +58,29 @@ class AuthorizationChecker:
         channel_id = self._auth.discord_channel_id
 
         # Guild whitelist check
-        if required_guild_ids is not None:
-            if guild_id not in required_guild_ids:
-                raise AuthorizationError(
-                    f"User not authorized in this guild (guild_id={guild_id}); "
-                    "this command is not registered for your server."
-                )
+        if required_guild_ids and guild_id not in required_guild_ids:
+            raise AuthorizationError(
+                f"User not authorized in this guild (guild_id={guild_id}); "
+                "this command is not registered for your server."
+            )
 
         # Channel whitelist check
-        if required_channel_ids is not None:
-            if channel_id not in required_channel_ids:
-                raise AuthorizationError(
-                    f"User not authorized in this channel (channel_id={channel_id}); "
-                    "this command is not available in your channel."
-                )
+        if required_channel_ids and channel_id not in required_channel_ids:
+            raise AuthorizationError(
+                f"User not authorized in this channel (channel_id={channel_id}); "
+                "this command is not available in your channel."
+            )
 
     def check_user_is_member_of_guild(self) -> None:
         """Ensure the user's guild is not None and is a configured server.
 
         In practice this is a no-op if the interaction always carries a guild
-        ID, but it prevents None‑guild crashes if a DM interaction somehow
+        ID, but it prevents None-guild crashes if a DM interaction somehow
         reaches the bot.
         """
         if self._auth.discord_guild_id is None:
             raise AuthorizationError(
-                "Cannot operate outside a guild (DM detected). "
-                "This command is guild-only."
+                "Cannot operate outside a guild (DM detected). This command is guild-only."
             )
 
     # ------------------------------------------------------------------
@@ -106,20 +101,14 @@ class AuthorizationChecker:
             return
 
         # Check the authorized_users table via the repository layer.
-        # The repository will query the database; if no row exists, an
-        # AuthorizationError is raised below.
+        from ..storage.database import get_conn
         from ..storage.repositories import get_authorized_user
 
         auth_user = get_authorized_user(
-            conn=None,  # will be provided by caller via transaction
+            conn=get_conn(),
             discord_user_id=self._auth.discord_user_id,
             project_id=project_id,
         )
-        # The caller is responsible for passing a connection; if None is passed
-        # the repository will create one.  For now we short-circuit when the
-        # repository is called without a connection by checking the allowlist.
-        # This placeholder will be replaced by the real integration in the
-        # caller's transaction block.
         if auth_user is None:
             raise AuthorizationError(
                 f"User (id={self._auth.discord_user_id}) is not authorized "
@@ -127,9 +116,7 @@ class AuthorizationChecker:
                 "Use /connect-project to map this context to an authorized project."
             )
 
-    def check_command_mapped(
-        self, project_id: int, command_name: str
-    ) -> None:
+    def check_command_mapped(self, project_id: int, command_name: str) -> None:
         """Ensure the Discord guild/channel/context is mapped to this project+command.
 
         This consults the discord_mappings table to verify that the current
@@ -137,10 +124,11 @@ class AuthorizationChecker:
         this project.  Prevents arbitrary project access through command
         name guessing.
         """
+        from ..storage.database import get_conn
         from ..storage.repositories import get_mapping
 
         mapping = get_mapping(
-            conn=None,
+            conn=get_conn(),
             project_id=project_id,
             guild_id=self._auth.discord_guild_id,
             channel_id=self._auth.discord_channel_id,
@@ -164,9 +152,7 @@ class AuthorizationChecker:
             return
         self.check_project_access(project_id)
 
-    def check_project_and_command(
-        self, project_id: int, command_name: str
-    ) -> None:
+    def check_project_and_command(self, project_id: int, command_name: str) -> None:
         """Require both project access and command mapping validation."""
         self.check_project_access(project_id)
         self.check_command_mapped(project_id, command_name)

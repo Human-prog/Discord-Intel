@@ -9,17 +9,15 @@ All operations are read-only: no create, edit, merge, delete, or push.
 
 from __future__ import annotations
 
-import json
 import time
-from typing import Any, Optional
+from typing import Any
 
 from project_intelligence.config import Settings, load_settings
-from project_intelligence.security import rate_limiter
-
 
 # ---------------------------------------------------------------------------
 # GitHub integration abstraction
 # ---------------------------------------------------------------------------
+
 
 class GitHubIntegration:
     """GitHub read-only integration abstraction.
@@ -35,7 +33,7 @@ class GitHubIntegration:
         self.settings = settings
         self.mode = settings.github_mode
         self.allowed_repos = settings.github_allowed_repositories
-        self._cache: dict[str, tuple[float, Any]] = {}
+        self._cache: dict[str, tuple[float, dict[str, Any]]] = {}
         self._cache_ttl = 300  # 5 minutes
 
     def is_enabled(self) -> bool:
@@ -90,7 +88,7 @@ class GitHubIntegration:
         return None
 
 
-def create_github_integration(settings: Optional[Settings] = None) -> GitHubIntegration:
+def create_github_integration(settings: Settings | None = None) -> GitHubIntegration:
     """Factory for GitHubIntegration."""
     if settings is None:
         settings = load_settings()

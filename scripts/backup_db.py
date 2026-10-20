@@ -42,7 +42,7 @@ def backup_database(db_path: Path, backup_dir: Path) -> Path:
     """Create a consistent backup using SQLite's online backup API."""
     backup_dir.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d_%H%M%S")
     backup_name = f"db_{timestamp}.sqlite3"
     backup_path = backup_dir / backup_name
 
@@ -76,15 +76,15 @@ def backup_database(db_path: Path, backup_dir: Path) -> Path:
 
 def cleanup_old_backups(backup_dir: Path, retention_days: int) -> None:
     """Remove backups older than the retention period."""
-    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=retention_days)
+    cutoff = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=retention_days)
     removed = 0
     for backup_file in backup_dir.glob("db_*.sqlite3"):
         try:
-            mtime = datetime.datetime.fromtimestamp(backup_file.stat().st_mtime, tz=datetime.timezone.utc)
+            mtime = datetime.datetime.fromtimestamp(backup_file.stat().st_mtime, tz=datetime.UTC)
             if mtime < cutoff:
                 backup_file.unlink()
                 removed += 1
-        except Exception:
+        except Exception:  # noqa: S110 - best-effort cleanup of unreadable files
             pass
     if removed:
         print(f"Removed {removed} old backup(s) older than {retention_days} days")
@@ -93,7 +93,9 @@ def cleanup_old_backups(backup_dir: Path, retention_days: int) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Consistent SQLite backup")
     parser.add_argument("--output", type=Path, default=None, help="Backup directory")
-    parser.add_argument("--retention", type=int, default=DEFAULT_RETENTION_DAYS, help="Retention days")
+    parser.add_argument(
+        "--retention", type=int, default=DEFAULT_RETENTION_DAYS, help="Retention days"
+    )
     args = parser.parse_args()
 
     db_path = get_db_path()

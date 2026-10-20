@@ -10,21 +10,21 @@ AI functionality is optional and degrades safely when Ollama is unavailable.
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
 from project_intelligence.config import Settings, load_settings
 
-
 # ---------------------------------------------------------------------------
 # Ollama client
 # ---------------------------------------------------------------------------
 
+
 class OllamaClient:
     """HTTP client for local Ollama API."""
 
-    def __init__(self, settings: Optional[Settings] = None) -> None:
+    def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or load_settings()
         self.base_url = self.settings.ollama_base_url
         self.model = self.settings.ollama_model
@@ -47,7 +47,7 @@ class OllamaClient:
                 if response.status_code == 200:
                     data = response.json()
                     return [m["name"] for m in data.get("models", [])]
-        except Exception:
+        except Exception:  # noqa: S110 - unavailable Ollama means no models
             pass
         return []
 
@@ -55,7 +55,7 @@ class OllamaClient:
         self,
         prompt: str,
         *,
-        model: Optional[str] = None,
+        model: str | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
     ) -> str | None:
@@ -91,8 +91,9 @@ class OllamaClient:
                 )
                 if response.status_code == 200:
                     data = response.json()
-                    return data.get("response", "")
-        except Exception:
+                    text = data.get("response", "")
+                    return text if isinstance(text, str) else None
+        except Exception:  # noqa: S110 - generate returns None on transport errors
             pass
         return None
 
@@ -101,7 +102,7 @@ class OllamaClient:
         prompt: str,
         schema: dict[str, Any],
         *,
-        model: Optional[str] = None,
+        model: str | None = None,
     ) -> dict[str, Any] | None:
         """Generate a structured response validated against a schema."""
         response = self.generate(prompt, model=model, max_tokens=2048, temperature=0.3)
@@ -110,11 +111,13 @@ class OllamaClient:
         try:
             # Extract JSON from response
             import re
+
             json_match = re.search(r"\{.*\}", response, re.DOTALL)
             if json_match:
                 data = json.loads(json_match.group())
-                return data
-        except (json.JSONDecodeError, Exception):
+                if isinstance(data, dict):
+                    return data
+        except Exception:  # noqa: S110 - malformed model output means no result
             pass
         return None
 
@@ -122,6 +125,7 @@ class OllamaClient:
 # ---------------------------------------------------------------------------
 # Model adapter
 # ---------------------------------------------------------------------------
+
 
 class ModelAdapter:
     """Adapter to change models without rewriting the application."""
@@ -136,18 +140,20 @@ class ModelAdapter:
 
     def recommend(self, context: str) -> str | None:
         """Generate recommendations from context."""
-        prompt = f"Based on the following context, suggest next steps:\n\n{context}\n\nRecommendations:"
+        prompt = (
+            f"Based on the following context, suggest next steps:\n\n{context}\n\nRecommendations:"
+        )
         return self.client.generate(prompt, max_tokens=512, temperature=0.5)
 
 
-def create_ollama_client(settings: Optional[Settings] = None) -> OllamaClient:
+def create_ollama_client(settings: Settings | None = None) -> OllamaClient:
     """Factory for OllamaClient."""
     if settings is None:
         settings = load_settings()
     return OllamaClient(settings)
 
 
-def create_model_adapter(settings: Optional[Settings] = None) -> ModelAdapter:
+def create_model_adapter(settings: Settings | None = None) -> ModelAdapter:
     """Factory for ModelAdapter."""
     client = create_ollama_client(settings)
     return ModelAdapter(client)

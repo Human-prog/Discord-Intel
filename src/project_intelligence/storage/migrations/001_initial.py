@@ -53,9 +53,7 @@ def up(conn: Any) -> None:
         )
         """
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_projects_root ON projects(allowed_root)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_projects_root ON projects(allowed_root)")
 
     # ---- project_sources -------------------------------------------------
     conn.execute(
@@ -94,9 +92,7 @@ def up(conn: Any) -> None:
         )
         """
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_discord_project ON discord_mappings(project_id)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_discord_project ON discord_mappings(project_id)")
 
     # ---- authorized_users ------------------------------------------------
     conn.execute(
@@ -145,7 +141,8 @@ def up(conn: Any) -> None:
             target_date_utc TEXT,
             completed_at_utc TEXT,
             created_at_utc TEXT NOT NULL,
-            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            UNIQUE(project_id, title)
         )
         """
     )
@@ -166,16 +163,13 @@ def up(conn: Any) -> None:
             is_stale INTEGER NOT NULL DEFAULT 0,
             relevance_score REAL DEFAULT 0.0,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-            FOREIGN KEY (source_id) REFERENCES project_sources(id) ON DELETE SET NULL
+            FOREIGN KEY (source_id) REFERENCES project_sources(id) ON DELETE SET NULL,
+            UNIQUE(project_id, source_id, title)
         )
         """
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_evidence_project ON evidence(project_id)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_evidence_hash ON evidence(content_hash)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_evidence_project ON evidence(project_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_evidence_hash ON evidence(content_hash)")
 
     # ---- repository_snapshots --------------------------------------------
     conn.execute(
@@ -250,9 +244,7 @@ def up(conn: Any) -> None:
         )
         """
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_reports_job ON research_reports(research_job_id)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_job ON research_reports(research_job_id)")
 
     # ---- scheduled_jobs --------------------------------------------------
     conn.execute(
@@ -284,16 +276,15 @@ def up(conn: Any) -> None:
             project_id INTEGER NOT NULL,
             checked_at_utc TEXT NOT NULL,
             status TEXT NOT NULL,
-            details_text TEXT,
+            details TEXT,
             git_head TEXT,
             git_dirty INTEGER NOT NULL DEFAULT 0,
+            correlation_id TEXT,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
         )
         """
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_health_project ON health_snapshots(project_id)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_health_project ON health_snapshots(project_id)")
 
     # ---- agent_tasks -----------------------------------------------------
     conn.execute(
@@ -331,14 +322,10 @@ def up(conn: Any) -> None:
         )
         """
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_events(timestamp_utc)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_events(timestamp_utc)")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_events(actor_discord_user_id)"
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_audit_project ON audit_events(project_id)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_project ON audit_events(project_id)")
 
     conn.execute("COMMIT")

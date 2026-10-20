@@ -12,45 +12,50 @@ interface.
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import field
+from collections.abc import Hashable
 from time import monotonic
-from typing import Any, DefaultDict, Dict, List, NamedTuple, Optional
-
+from typing import Any, NamedTuple
 
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
 
+
 class RateLimitRecord(NamedTuple):
     """One entry in the sliding window for a single key."""
 
-    timestamps: List[float] = field(default_factory=list)
+    timestamps: list[float]
+
+
+def _empty_record() -> RateLimitRecord:
+    """Return a fresh record with its own list (never share mutable state)."""
+    return RateLimitRecord(timestamps=[])
 
 
 # ---------------------------------------------------------------------------
-# Per‑category limits (configured from Settings)
+# Per-category limits (configured from Settings)
 # ---------------------------------------------------------------------------
 
 #: Default rate limits when the field is not explicitly overridden.
 #  Keys map to Settings field names; values are (max_requests, window_seconds).
 DEFAULT_RATE_LIMITS: dict[str, tuple[int, int]] = {
-    "command_per_user": (5, 60),       # 5 commands per user per 60s
-    "command_per_guild": (10, 60),     # 10 commands per guild per 60s
-    "command_per_channel": (10, 60),   # 10 commands per channel per 60s
-    "research_per_user": (3, 3600),    # 3 research jobs per user per hour
+    "command_per_user": (5, 60),  # 5 commands per user per 60s
+    "command_per_guild": (10, 60),  # 10 commands per guild per 60s
+    "command_per_channel": (10, 60),  # 10 commands per channel per 60s
+    "research_per_user": (3, 3600),  # 3 research jobs per user per hour
     "health_check_per_hour": (60, 3600),  # 60 health checks per hour
 }
 
 
 # -------------------------------------------------------------------------__
-# Sliding‑window rate‑limit store (in‑memory, process‑local)
+# Sliding-window rate-limit store (in-memory, process-local)
 # ---------------------------------------------------------------------------
 
-_redis_like: Optional[Any] = None  # placeholder for future distributed store
+_redis_like: Any | None = None  # placeholder for future distributed store
 
 
 class RateLimiter:
-    """Sliding‑window rate limiter for Discord bot commands.
+    """Sliding-window rate limiter for Discord bot commands.
 
     Each ``key`` (typically a Discord snowflake integer) gets its own window.
     Requests outside the window are allowed; requests inside the window are
@@ -62,9 +67,7 @@ class RateLimiter:
     """
 
     def __init__(self, max_keys: int = 10_000) -> None:
-        self._windows: DefaultDict[int, RateLimitRecord] = defaultdict(
-            RateLimitRecord
-        )
+        self._windows: defaultdict[Hashable, RateLimitRecord] = defaultdict(_empty_record)
         self._max_keys = max_keys
 
     # ------------------------------------------------------------------
@@ -73,10 +76,10 @@ class RateLimiter:
 
     def is_rate_limited(
         self,
-        key: int,
+        key: Hashable,
         limit: int,
         window: float,
-    ) -> Tuple[bool, float]:
+    ) -> tuple[bool, float]:
         """Return ``(True, reset_time)`` if the key exceeds *limit* within
         *window* seconds.  Otherwise return ``(False, reset_time)`` where
         *reset_time* is the epoch seconds when the next request will be
@@ -100,7 +103,7 @@ class RateLimiter:
 
         # Record this request
         timestamps.append(now)
-        # Keep the list bounded (prevent unbounded growth from long‑running processes)
+        # Keep the list bounded (prevent unbounded growth from long-running processes)
         if len(timestamps) > self._max_keys:
             # Keep the most recent entries
             timestamps = timestamps[-self._max_keys :]
@@ -115,25 +118,33 @@ class RateLimiter:
     # Convenience methods for the common limit categories
     # ------------------------------------------------------------------
 
-    def check_command_per_user(self, user_id: int) -> Tuple[bool, float]:
+    def check_command_per_user(self, user_id: int) -> tuple[bool, float]:
         """Check the per-user command limit.  Returns ``(limited, reset)``."""
-        return self.is_rate_limited(user_id, *DEFAULT_RATE_LIMITS["command_per_user"])
+        return self.is_rate_limited(
+            ("command:user", user_id), *DEFAULT_RATE_LIMITS["command_per_user"]
+        )
 
-    def check_command_per_guild(self, guild_id: int) -> Tuple[bool, float]:
+    def check_command_per_guild(self, guild_id: int) -> tuple[bool, float]:
         """Check the per-guild command limit.  Returns ``(limited, reset)``."""
-        return self.is_rate_limited(guild_id, *DEFAULT_RATE_LIMITS["command_per_guild"])
+        return self.is_rate_limited(
+            ("command:guild", guild_id), *DEFAULT_RATE_LIMITS["command_per_guild"]
+        )
 
-    def check_command_per_channel(self, channel_id: int) -> Tuple[bool, float]:
+    def check_command_per_channel(self, channel_id: int) -> tuple[bool, float]:
         """Check the per-channel command limit.  Returns ``(limited, reset)``."""
-        return self.is_rate_limited(channel_id, *DEFAULT_RATE_LIMITS["command_per_channel"])
+        return self.is_rate_limited(
+            ("command:channel", channel_id), *DEFAULT_RATE_LIMITS["command_per_channel"]
+        )
 
-    def check_research_per_user(self, user_id: int) -> Tuple[bool, float]:
+    def check_research_per_user(self, user_id: int) -> tuple[bool, float]:
         """Check the per-user research-job limit.  Returns ``(limited, reset)``."""
-        return self.is_rate_limited(user_id, *DEFAULT_RATE_LIMITS["research_per_user"])
+        return self.is_rate_limited(
+            ("research:user", user_id), *DEFAULT_RATE_LIMITS["research_per_user"]
+        )
 
-    def check_health_per_hour(self) -> Tuple[bool, float]:
-        """Placeholder: health-check rate limit.  Currently always allowed."""
-        return False, monotonic()
+    def check_health_per_hour(self) -> tuple[bool, float]:
+        """Check the global health-check limit.  Returns ``(limited, reset)``."""
+        return self.is_rate_limited("health:global", *DEFAULT_RATE_LIMITS["health_check_per_hour"])
 
 
 # Global instance so the bot and dashboard can share the same limiter.

@@ -1,4 +1,4 @@
-"""Research module for Phase 15 — Research and Source Discovery.
+"""Research module for Phase 15 - Research and Source Discovery.
 
 Provides controlled research pipeline with SSRF protections, evidence-backed
 reports, citation tracking, and URL/DNS/IP validation.
@@ -12,7 +12,7 @@ from .research_pipeline import (
     create_research_pipeline,
     is_safe_url,
     validate_redirect,
-)  # noqa: F401
+)
 
 __all__ = [
     "ResearchPipeline",

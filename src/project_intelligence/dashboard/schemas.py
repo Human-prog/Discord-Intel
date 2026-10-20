@@ -10,41 +10,48 @@ before reaching these schemas.
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
-from pydantic import BaseModel, Field, root_validator
+from pydantic import BaseModel, Field
+
+
+def _utc_now_iso() -> str:
+    """Return the current time as an ISO-8601 UTC string."""
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 # ---------------------------------------------------------------------------
 # Enumerations
 # ---------------------------------------------------------------------------
 
-class HealthStatus(str, Enum):
+
+class HealthStatus(StrEnum):
     healthy = "healthy"
     stale = "stale"
     unhealthy = "unhealthy"
     unknown = "unknown"
 
 
-class ProjectStatus(str, Enum):
+class ProjectStatus(StrEnum):
     active = "active"
     archived = "archived"
 
 
-class MilestoneStatus(str, Enum):
+class MilestoneStatus(StrEnum):
     open = "open"
     in_progress = "in_progress"
     completed = "completed"
 
 
-class EvidenceStatus(str, Enum):
+class EvidenceStatus(StrEnum):
     verified = "verified"
     stale = "stale"
     conflicting = "conflicting"
 
 
-class ActivityType(str, Enum):
+class ActivityType(StrEnum):
     note = "note"
     milestone = "milestone"
     evidence = "evidence"
@@ -55,28 +62,24 @@ class ActivityType(str, Enum):
 # Core entity summaries (read-only; IDs only, no nested payloads)
 # ---------------------------------------------------------------------------
 
+
 class ProjectSummary(BaseModel):
     id: int
     name: str
-    description: Optional[str] = Field(None, description="Short description")
+    description: str | None = Field(None, description="Short description")
     allowed_root: str
     status: HealthStatus = HealthStatus.unknown
     milestone_count: int = Field(0, ge=0)
     evidence_count: int = Field(0, ge=0)
     last_checked: str  # ISO-8601 UTC
 
-    @root_validator(skip_on_failure=True)
-    def enforce_readonly(cls, values: dict[str, Any]) -> dict[str, Any]:
-        # Ensure the model cannot be used for writes; this is purely a summary.
-        return values
-
 
 class MilestoneSummary(BaseModel):
     id: int
     title: str
-    description: Optional[str] = None
+    description: str | None = None
     status: MilestoneStatus
-    target_date: Optional[str] = None  # ISO-8601 UTC or None
+    target_date: str | None = None  # ISO-8601 UTC or None
     created_at: str  # ISO-8601 UTC
 
 
@@ -93,6 +96,7 @@ class EvidenceSummary(BaseModel):
 # Dashboard response schemas
 # ---------------------------------------------------------------------------
 
+
 class DashboardHealth(BaseModel):
     """Overall application health status."""
 
@@ -103,18 +107,22 @@ class DashboardHealth(BaseModel):
     dashboard_bound_port: int
     ollama_configured: bool
     research_configured: bool
-    uptime_seconds: Optional[float] = None
+    uptime_seconds: float | None = None
 
-    model_config = {"json_schema_extra": {"example": {
-        "app_env": "development",
-        "app_log_level": "INFO",
-        "database_healthy": True,
-        "dashboard_bound_host": "127.0.0.1",
-        "dashboard_bound_port": 8765,
-        "ollama_configured": True,
-        "research_configured": False,
-        "uptime_seconds": 3600.5,
-    }}}
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "app_env": "development",
+                "app_log_level": "INFO",
+                "database_healthy": True,
+                "dashboard_bound_host": "127.0.0.1",
+                "dashboard_bound_port": 8765,
+                "ollama_configured": True,
+                "research_configured": False,
+                "uptime_seconds": 3600.5,
+            }
+        }
+    }
 
 
 class ProjectListItem(BaseModel):
@@ -132,7 +140,7 @@ class ProjectDetail(BaseModel):
 
     id: int
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     allowed_root: str
     status: HealthStatus
     created_at_utc: str
@@ -152,7 +160,7 @@ class MilestoneListItem(BaseModel):
     project_id: int
     title: str
     status: MilestoneStatus
-    target_date: Optional[str] = None
+    target_date: str | None = None
 
 
 class EvidenceDetail(BaseModel):
@@ -164,7 +172,7 @@ class EvidenceDetail(BaseModel):
     content_hash: str
     retrieved_at_utc: str
     confidence: float
-    claim: Optional[str] = None
+    claim: str | None = None
     is_stale: bool
     relevance_score: float = Field(ge=0.0, le=1.0)
 
@@ -174,16 +182,17 @@ class ActivityEntry(BaseModel):
 
     id: int
     type: ActivityType
-    project_id: Optional[int] = None
+    project_id: int | None = None
     title: str
     occurred_at_utc: str
-    actor: Optional[str] = None  # Discord user mention or "system"
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    actor: str | None = None  # Discord user mention or "system"
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
 # Pagination and query schemas
 # ---------------------------------------------------------------------------
+
 
 class PaginationParams(BaseModel):
     """Query parameters for paginated endpoints."""
@@ -191,61 +200,62 @@ class PaginationParams(BaseModel):
     page: int = Field(default=1, ge=1, description="1-based page number")
     per_page: int = Field(default=20, ge=1, le=100, description="Items per page")
 
-    @root_validator(skip_on_failure=True)
-    def ensure_consistent_page(cls, values: dict[str, Any]) -> dict[str, Any]:
-        # If per_page is set to an extreme value, cap the effective page range.
-        return values
-
 
 class ProjectSearchParams(BaseModel):
     """Query parameters for project search/filter."""
 
-    name: Optional[str] = None
-    status: Optional[HealthStatus] = None
-    min_evidence: Optional[int] = Field(default=None, ge=0)
+    name: str | None = None
+    status: HealthStatus | None = None
+    min_evidence: int | None = Field(default=None, ge=0)
 
 
 # ---------------------------------------------------------------------------
 # Error response schema
 # ---------------------------------------------------------------------------
 
+
 class DashboardError(BaseModel):
-    """Standard error response — never contains secrets or stack traces."""
+    """Standard error response - never contains secrets or stack traces."""
 
     error: str = Field(description="Machine-readable error kind")
     message: str = Field(description="Human-readable explanation")
-    correlation_id: Optional[str] = Field(default=None, description="Track across requests")
-    timestamp_utc: str = Field(default_factory=lambda: __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat() + "Z")
+    correlation_id: str | None = Field(default=None, description="Track across requests")
+    timestamp_utc: str = Field(default_factory=_utc_now_iso)
 
-    model_config = {"json_schema_extra": {"example": {
-        "error": "unauthorized",
-        "message": "Authentication required or denied",
-        "correlation_id": "c1d2e3f4-5678-90ab-cd-ef1234567890",
-        "timestamp_utc": "2026-10-17T12:34:56.789Z",
-    }}}
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "error": "unauthorized",
+                "message": "Authentication required or denied",
+                "correlation_id": "c1d2e3f4-5678-90ab-cd-ef1234567890",
+                "timestamp_utc": "2026-10-17T12:34:56.789Z",
+            }
+        }
+    }
 
 
 # ---------------------------------------------------------------------------
 # State / loading schemas (for frontend use)
 # ---------------------------------------------------------------------------
 
+
 class LoadingState(BaseModel):
     """Minimal state object shown while dashboard data is loading."""
 
     loading: bool = True
-    error: Optional[str] = None
-    last_refreshed: str = Field(default_factory=lambda: __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat() + "Z")
+    error: str | None = None
+    last_refreshed: str = Field(default_factory=_utc_now_iso)
 
 
 class EmptyState(BaseModel):
     """Minimal state object shown when no data matches the current filter."""
 
     message: str
-    suggestion: Optional[str] = None
+    suggestion: str | None = None
 
 
 class UnauthorizedState(BaseModel):
     """State shown when the user is not authorized for the requested resource."""
 
     reason: str
-    contact: Optional[str] = None  # e.g., "contact an owner"
+    contact: str | None = None  # e.g., "contact an owner"

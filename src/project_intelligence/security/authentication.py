@@ -10,8 +10,8 @@ No client-supplied values are trusted without server-side validation.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
+from typing import Any
 
 from ..config import Settings
 
@@ -29,7 +29,7 @@ class AuthContext:
     """Immutable context carrying validated Discord identity.
 
     Invariants: if the context was constructed successfully, all IDs are
-    positive integers.  Missing or invalid IDs are never represented — the
+    positive integers.  Missing or invalid IDs are never represented - the
     constructor raises AuthError instead.
     """
 
@@ -42,9 +42,13 @@ class AuthContext:
     discord_channel_id: int
     """The channel within the guild where the command was invoked."""
 
-    @property
+    auth_via: str = "discord"
+    """Where the context came from: 'discord' (interaction) or 'owner_session'."""
+
     def is_owner(self, settings: Settings) -> bool:
-        """True if this user is listed as an owner in the configured settings."""
+        """True if this is an owner session or the user is a configured owner."""
+        if self.auth_via == "owner_session":
+            return True
         return self.discord_user_id in settings.discord_owner_user_ids
 
 
@@ -56,13 +60,9 @@ def _snowflake(value: Any, field_name: str) -> int:
     try:
         iv = int(value)
     except (TypeError, ValueError, AttributeError):
-        raise AuthError(
-            f"Invalid {field_name}: must be a positive integer snowflake"
-        ) from None
+        raise AuthError(f"Invalid {field_name}: must be a positive integer snowflake") from None
     if iv < 1:
-        raise AuthError(
-            f"Invalid {field_name}: Discord IDs must be positive (got {iv})"
-        ) from None
+        raise AuthError(f"Invalid {field_name}: Discord IDs must be positive (got {iv})") from None
     return iv
 
 
@@ -84,9 +84,7 @@ def authenticate_from_interaction(
     return AuthContext(discord_user_id=user, discord_guild_id=guild, discord_channel_id=channel)
 
 
-def require_authentication(
-    auth_ctx: AuthContext, *, settings: Settings
-) -> None:
+def require_authentication(auth_ctx: AuthContext, *, settings: Settings) -> None:
     """Fail-closed: raise AuthError if the context does not represent a
     configured owner when owner-only operation is required.
 

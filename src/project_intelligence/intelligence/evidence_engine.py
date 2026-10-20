@@ -8,15 +8,15 @@ Detects stale, conflicting, and missing data.
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from project_intelligence.config import Settings, load_settings
-
 
 # ---------------------------------------------------------------------------
 # Evidence model
 # ---------------------------------------------------------------------------
+
 
 class EvidenceClaim:
     """A single claim with supporting evidence references."""
@@ -41,7 +41,7 @@ class EvidenceClaim:
 class ProjectIntelligence:
     """Project intelligence engine that converts verified records into insights."""
 
-    def __init__(self, settings: Optional[Settings] = None) -> None:
+    def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or load_settings()
         self.claims: list[EvidenceClaim] = []
 
@@ -94,10 +94,10 @@ class ProjectIntelligence:
             "facts": len(self.get_facts()),
             "inferences": len(self.get_inferences()),
             "uncertain": len(self.get_uncertain()),
-            "generated_at_utc": datetime.now(timezone.utc).isoformat() + "Z",
+            "generated_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         }
 
 
-def create_intelligence(settings: Optional[Settings] = None) -> ProjectIntelligence:
+def create_intelligence(settings: Settings | None = None) -> ProjectIntelligence:
     """Factory for ProjectIntelligence."""
     return ProjectIntelligence(settings)

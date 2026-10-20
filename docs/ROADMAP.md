@@ -13,21 +13,23 @@
 | 3 | Testing, CI, code quality | ✅ PASS | `phases/PHASE_03.md` | Ruff, mypy, 100% branch coverage gate, pip-audit, secret scanner, least-privilege CI; 83 tests passing (2026-10-16). |
 | 4 | Storage & data migrations | ✅ PASS | `phases/PHASE_04.md` | SQLite layer, versioned migrations, 17 entities; 83 tests passing (2026-10-16) |
 | 5 | Authentication, authorization, threat model | ✅ PASS | `phases/PHASE_05.md` | Centralized authN/authZ, threat model, rate limits, redaction, audit events; 28 security tests passing (2026-10-16) |
-| 6 | Project health engine | ⬜ Not started | — | — |
-| 7 | Read-only dashboard API & mobile interface | ⬜ Not started | — | Loopback bind mandatory. |
-| 8 | Dashboard authentication & Tailscale access | ⬜ Not started | — | **Owner approval required** for Tailscale Serve changes. |
-| 9 | Deployment & systemd hardening | ⬜ Not started | — | **Owner approval required** for host changes. |
-| 10 | Discord bot foundation | ⬜ Not started | — | **Owner approval required** to enable live Discord interactions. |
-| 11 | Project mapping & command set | ⬜ Not started | — | — |
-| 12 | GitHub read-only integration | ⬜ Not started | — | **Owner approval required** for credentials/App registration. |
-| 13 | Evidence & project intelligence engine | ⬜ Not started | — | — |
-| 14 | Local Ollama & model evaluation | ⬜ Not started | — | **Owner approval required** for large model downloads. |
-| 15 | Research & source discovery | ⬜ Not started | — | — |
-| 16 | Scheduler, jobs, notifications | ⬜ Not started | — | — |
-| 17 | OpenCode read-only integration | ⬜ Not started | — | Disabled by default; **owner approval required** to enable. |
-| 18 | Security validation & adversarial testing | ⬜ Not started | — | Release-blocking gate for critical/high findings. |
-| 19 | Backup, restore, recovery | ⬜ Not started | — | — |
-| 20 | Controlled release & operational handoff | ⬜ Not started | — | **Owner approval required** for production deployment. |
+| 6 | Project health engine | ✅ PASS | `phases/PHASE_06.md` | Read-only Git checks within approved roots, fail-closed states, persisted snapshots; covered by the health suite (2026-10-20). |
+| 7 | Read-only dashboard API & mobile interface | ✅ PASS | `phases/PHASE_07.md` | FastAPI read-only API, owner-session auth, mobile-first single-file UI, pagination/search, loopback bind. |
+| 8 | Dashboard authentication & Tailscale access | ✅ PASS | `phases/PHASE_08.md` | HMAC-signed owner cookie (30-day TTL, HttpOnly, SameSite=Strict, Secure in production, GET/HEAD only); Tailscale Serve verified; no Funnel. |
+| 9 | Deployment & systemd hardening | ✅ PASS | `phases/PHASE_09.md` | Service account `dpi`, hardened unit, AppArmor profile, loopback `127.0.0.1:8765`; service verified active on `home3013`. |
+| 10 | Discord bot foundation | ✅ PASS | `phases/PHASE_10.md` | Minimal intents, central authorization, ephemeral replies, rate limits, offline doubles. Live token remains opt-in. |
+| 11 | Project mapping & command set | ✅ PASS | `phases/PHASE_11.md` | `/help /status /next /roadmap /blocker /connect-project /note /health`; owner-gated mappings; `/note`, `/roadmap`, `/health`, `/connect-project` use real records. `/next` and `/blocker` return truthful placeholders. |
+| 12 | GitHub read-only integration | ✅ PASS | `phases/PHASE_12.md` | Read-only adapter, allowlisted repositories, cache handling, mocked tests. Live API not exercised. |
+| 13 | Evidence & project intelligence engine | ✅ PASS | `phases/PHASE_13.md` | Evidence claims, facts/inference/uncertainty separation, deterministic summaries. |
+| 14 | Local Ollama & model evaluation | ✅ PASS | `phases/PHASE_14.md` | Bounded client, discovery, structured output, fallbacks. Local model remains opt-in. |
+| 15 | Research & source discovery | ✅ PASS | `phases/PHASE_15.md` | SSRF guards, domain allowlists, deduplication, citation-shaped reports. |
+| 16 | Scheduler, jobs, notifications | ✅ PASS | `phases/PHASE_16.md` | Persistent jobs, idempotent enqueue, bounded retries/backoff, concurrency limits. |
+| 17 | OpenCode read-only integration | ✅ PASS | `phases/PHASE_17.md` | Disabled by default; read-only adapter plus mock; no shell/edit/write surface. |
+| 18 | Security validation & adversarial testing | ✅ PASS | `phases/PHASE_18.md` | Auth bypass, isolation, injection/SSRF, redaction, rate-limit, and traversal suites; no unresolved critical/high findings. |
+| 19 | Backup, restore, recovery | ✅ PASS | `phases/PHASE_19.md` | SQLite `VACUUM INTO` backups, integrity checks, retention, restore runbook. |
+| 20 | Controlled release & operational handoff | ✅ PASS | `phases/PHASE_20.md` | Dashboard deployed and verified (loopback health 200, Tailscale Serve, all tailnet devices connected). Live Discord/GitHub/Ollama integrations remain opt-in. |
+
+> Test counts in earlier phase reports are historical. The current suite is **392 tests at 97.34% branch coverage** with a 95% gate (2026-10-20).
 
 ## Phase notes and gates
 

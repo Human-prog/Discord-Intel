@@ -1,186 +1,348 @@
-"""Read-only dashboard API for Discord Project Intelligence (Phase 7).
+"""Dashboard API and mobile UI for Discord Project Intelligence.
 
-FastAPI application with endpoints for:
-- Health, project list, project detail, milestone, evidence, recent activity
-- Centralized authentication and authorization (Phase 5)
-- Minimal responsive interface suitable for iPhone browsers
-- Loopback bind 127.0.0.1 by default
+FastAPI application providing:
+- Application health, project list/detail, milestones, evidence, recent activity
+- Owner-session authentication (Phase 8) plus centralized authorization (Phase 5)
+- A minimal, mobile-first HTML interface served at ``/`` for iPhone browsers
+- Loopback bind 127.0.0.1 by default; remote access only via Tailscale Serve
 - Safe error handling without stack traces or secret leakage
-- Pagination and reasonable response limits
+- Pagination and bounded response sizes
 
-All endpoints require centralized authorization before retrieving project data.
-Ephemeral responses are used for private results wherever supported.
+Authentication model
+--------------------
+- ``GET``/``HEAD`` requests may authenticate with the signed owner-session
+  cookie issued by ``POST /auth/session`` (the owner secret is the one-time
+  credential; the cookie is an HttpOnly, SameSite=Strict HMAC token).
+- State-changing requests never accept cookie authentication, so no
+  state-changing endpoint is reachable via CSRF.
+- Discord interaction context authentication is wired by the bot layer in a
+  later integration; browser access uses the owner session.
 """
 
 from __future__ import annotations
 
-from typing import List, Optional
-
-import json
+import logging
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
-from fastapi import FastAPI, Depends, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from starlette import status
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, Field
 
 from project_intelligence.config import Settings, load_settings
+from project_intelligence.dashboard import session_auth
 from project_intelligence.dashboard.schemas import (
-    DashboardHealth,
-    ProjectSummary,
-    ProjectListItem,
-    ProjectDetail,
-    MilestoneSummary,
-    MilestoneListItem,
-    EvidenceSummary,
-    EvidenceDetail,
     ActivityEntry,
-    DashboardError,
-    LoadingState,
-    EmptyState,
-    UnauthorizedState,
-    HealthStatus,
-    ProjectStatus,
-    MilestoneStatus,
-    EvidenceStatus,
     ActivityType,
+    DashboardError,
+    DashboardHealth,
+    EvidenceDetail,
+    EvidenceSummary,
+    HealthStatus,
+    MilestoneListItem,
+    MilestoneStatus,
+    MilestoneSummary,
     PaginationParams,
+    ProjectDetail,
+    ProjectListItem,
     ProjectSearchParams,
 )
-from project_intelligence.health.health_engine import (
-    check_project_health,
-    store_health_snapshot,
-    check_and_store_health,
-    _utc_now,
-)
 from project_intelligence.security import (
-    REDACTED,
-    is_secret_key,
-    redact_mapping,
-    redact_text,
-    redact_value,
-
     AuthContext,
-    require_authentication,
-    AuthError as AuthenticationError,
-    make_checker,
-    AuthorizationChecker,
+    AuthError,
     AuthorizationError,
-    rate_limiter,
-    DEFAULT_RATE_LIMITS,
+    make_checker,
 )
-from project_intelligence.storage.database import get_conn, close
-from project_intelligence.storage.repositories import (
-    get_project_by_root,
-    list_projects,
-    list_project_sources,
-    list_project_sources,
-    get_mapping,
-    list_mappings_for_project,
-    get_authorized_user,
-    list_authorized_users_for_project,
-    upsert_note,
-    list_notes_for_project,
-    upsert_milestone,
-    list_milestones_for_project,
-    upsert_evidence,
-    list_evidence_for_project,
-    upsert_repository_snapshot,
-    list_snapshots_for_project,
-    upsert_research_job,
-    list_research_jobs_for_project,
-    upsert_research_source,
-    list_projects as list_proj_repo,
-)
-from project_intelligence.security.authorization import AuthorizationChecker as AuthChecker
+from project_intelligence.security.authorization import AuthorizationChecker
+from project_intelligence.storage import repositories as repo
+from project_intelligence.storage.database import close as close_database
+from project_intelligence.storage.database import get_conn
+
+logger = logging.getLogger(__name__)
+
+_STARTED_AT = time.monotonic()
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+# Sign-in throttling: per-client sliding window, in-memory (single process).
+_LOGIN_ATTEMPTS: dict[str, list[float]] = {}
+_LOGIN_MAX_ATTEMPTS = 5
+_LOGIN_WINDOW_SECONDS = 60.0
+
 
 # ---------------------------------------------------------------------------
 # Lifespan / startup
 # ---------------------------------------------------------------------------
 
+
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Startup: validate configuration, ensure database exists."""
-    # Load settings; fail-closed if production requirements not met
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Startup: validate configuration and open the database (migrates)."""
     settings = load_settings()
-    # Ensure data directory exists (lazy; service startup creates it)
-    data_dir = Path(settings.data_dir)
-    data_dir.mkdir(parents=True, exist_ok=True)
-    # Yield control to the application
-    yield
-    # Shutdown: close any open connections (no-op with SQLite + get_conn)
+    Path(settings.data_dir).mkdir(parents=True, exist_ok=True)
+    get_conn()  # creates the database and applies pending migrations
+    logger.info("dashboard started (env=%s)", settings.app_env)
+    try:
+        yield
+    finally:
+        close_database()
 
 
 app = FastAPI(
-    title="Discord Project Intelligence — Dashboard API",
+    title="Discord Project Intelligence - Dashboard API",
     description="Private, read-only project-intelligence dashboard (loopback-bind only).",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
-# Bind security scheme for potential cookie/session auth in later phases
-bearer_scheme = HTTPBearer(auto_error=False)
-
 
 # ---------------------------------------------------------------------------
-# Dependency: get current settings
+# Dependencies
 # ---------------------------------------------------------------------------
+
 
 def get_settings() -> Settings:
     """Return loaded (validated) application settings."""
     return load_settings()
 
 
-# ---------------------------------------------------------------------------
-# Dependency: authenticate the request via Discord interaction context
-# ---------------------------------------------------------------------------
-
 def get_auth_context(
     request: Request,
+    settings: Settings = Depends(get_settings),
 ) -> AuthContext:
-    """Extract Discord IDs from the interaction context.
+    """Authenticate the request.
 
-    In production this would parse the Discord interaction payload.
-    For now we raise AuthError so every protected endpoint is explicit.
+    Read-only requests accept the owner-session cookie.  Everything else is
+    rejected here; Discord interaction authentication is provided by the bot
+    layer and will be added when interactions are wired to the dashboard.
     """
-    # The real payload parsing happens in the bot layer; here we simply
-    # require that the caller provide user/guild/channel via query or header
-    # as a placeholder for the Phase-5 integration.
+    if request.method in ("GET", "HEAD"):
+        token = request.cookies.get(session_auth.SESSION_COOKIE_NAME)
+        if session_auth.verify_session_token(token, settings):
+            return session_auth.owner_auth_context(settings)
+
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Authentication required — provide Discord interaction context",
+        detail="Authentication required - sign in to the dashboard",
     )
 
 
-# ---------------------------------------------------------------------------
-# Dependency: central authorization checker
-# ---------------------------------------------------------------------------
-
 def get_auth_checker(
-    settings: Settings = Depends(get_settings), auth_ctx: AuthContext = Depends(get_auth_context)
-) -> AuthChecker:
+    settings: Settings = Depends(get_settings),
+    auth_ctx: AuthContext = Depends(get_auth_context),
+) -> AuthorizationChecker:
     """Return a per-request AuthorizationChecker instance."""
     return make_checker(auth_ctx, settings)
 
 
 # ---------------------------------------------------------------------------
-# Helper: run a check and produce a secret-free error response
+# Session request/response models
 # ---------------------------------------------------------------------------
 
-def _auth_required() -> None:
-    """Raise an HTTP 401 that never leaks secrets."""
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Authentication required or denied",
+
+class SessionLoginRequest(BaseModel):
+    """One-time presentation of the owner secret."""
+
+    token: str = Field(min_length=1, max_length=512)
+
+
+class SessionStatus(BaseModel):
+    """Current session state."""
+
+    authenticated: bool
+    expires_at_utc: str | None = None
+
+
+class MilestoneCreate(BaseModel):
+    """Payload for creating or updating a milestone."""
+
+    title: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+    status: MilestoneStatus = MilestoneStatus.open
+    target_date: str | None = Field(default=None, max_length=40)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _login_allowed(client: str) -> bool:
+    now = time.monotonic()
+    attempts = [t for t in _LOGIN_ATTEMPTS.get(client, []) if now - t < _LOGIN_WINDOW_SECONDS]
+    if attempts:
+        _LOGIN_ATTEMPTS[client] = attempts
+    else:
+        _LOGIN_ATTEMPTS.pop(client, None)
+    return len(attempts) < _LOGIN_MAX_ATTEMPTS
+
+
+def _record_failed_login(client: str) -> None:
+    _LOGIN_ATTEMPTS.setdefault(client, []).append(time.monotonic())
+
+
+def _client_host(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+def _parse_utc(value: str) -> datetime | None:
+    try:
+        return datetime.fromisoformat(value.rstrip("Z")).replace(tzinfo=UTC)
+    except (ValueError, TypeError):
+        return None
+
+
+def _health_freshness(checked_at_utc: str) -> str:
+    parsed = _parse_utc(checked_at_utc)
+    if parsed is None:
+        return "unknown"
+    age = (datetime.now(UTC) - parsed).total_seconds()
+    if age <= 24 * 3600:
+        return "fresh"
+    if age <= 7 * 24 * 3600:
+        return "stale"
+    return "unknown"
+
+
+def _health_status(value: str | None) -> HealthStatus:
+    try:
+        return HealthStatus(value) if value is not None else HealthStatus.unknown
+    except ValueError:
+        return HealthStatus.unknown
+
+
+def _milestone_status(value: str) -> MilestoneStatus:
+    try:
+        return MilestoneStatus(value)
+    except ValueError:
+        return MilestoneStatus.open
+
+
+def _clamp_unit(value: Any) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return min(1.0, max(0.0, number))
+
+
+def _error_response(request: Request, status_code: int, error: str, message: str) -> JSONResponse:
+    payload = DashboardError(
+        error=error,
+        message=message,
+        correlation_id=getattr(request.state, "correlation_id", None),
+    )
+    return JSONResponse(status_code=status_code, content=payload.model_dump(mode="json"))
+
+
+# ---------------------------------------------------------------------------
+# Exception handlers - never leak internals
+# ---------------------------------------------------------------------------
+
+
+@app.exception_handler(AuthorizationError)
+async def _handle_authorization_error(request: Request, exc: AuthorizationError) -> JSONResponse:
+    return _error_response(request, status.HTTP_403_FORBIDDEN, "forbidden", exc.message)
+
+
+@app.exception_handler(AuthError)
+async def _handle_auth_error(request: Request, exc: AuthError) -> JSONResponse:
+    return _error_response(request, status.HTTP_401_UNAUTHORIZED, "unauthorized", exc.message)
+
+
+# ---------------------------------------------------------------------------
+# UI
+# ---------------------------------------------------------------------------
+
+
+@app.get("/", include_in_schema=False)
+async def ui_index() -> FileResponse:
+    """Serve the mobile-first dashboard UI."""
+    index = _STATIC_DIR / "index.html"
+    if not index.is_file():  # pragma: no cover - packaging failure
+        raise HTTPException(status_code=404, detail="Dashboard UI is not installed")
+    return FileResponse(index, media_type="text/html")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> Response:
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------------------------
+# Session endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.post(
+    "/auth/session",
+    response_model=SessionStatus,
+    summary="Sign in with the owner secret",
+    description="Exchange the owner secret (dashboard session secret file) for a signed, "
+    "HttpOnly session cookie.  Rate limited per client.",
+    responses={401: {"model": DashboardError}, 429: {"model": DashboardError}},
+)
+async def api_login(
+    payload: SessionLoginRequest,
+    request: Request,
+    response: Response,
+    settings: Settings = Depends(get_settings),
+) -> SessionStatus:
+    client = _client_host(request)
+    if not _login_allowed(client):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many sign-in attempts; try again in a minute",
+        )
+
+    if not session_auth.verify_owner_secret(payload.token.strip(), settings):
+        _record_failed_login(client)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid dashboard token"
+        )
+
+    token, expires = session_auth.issue_session_token(settings)
+    response.set_cookie(
+        session_auth.SESSION_COOKIE_NAME,
+        token,
+        **session_auth.get_cookie_security_settings(settings),
+    )
+    return SessionStatus(
+        authenticated=True,
+        expires_at_utc=datetime.fromtimestamp(expires, UTC).isoformat(),
     )
 
 
+@app.get(
+    "/auth/session",
+    response_model=SessionStatus,
+    summary="Report current session state",
+)
+async def api_session_status(
+    request: Request,
+    settings: Settings = Depends(get_settings),
+) -> SessionStatus:
+    token = request.cookies.get(session_auth.SESSION_COOKIE_NAME)
+    return SessionStatus(authenticated=session_auth.verify_session_token(token, settings))
+
+
+@app.post(
+    "/auth/logout",
+    response_model=SessionStatus,
+    summary="Clear the session cookie",
+)
+async def api_logout(response: Response) -> SessionStatus:
+    response.delete_cookie(session_auth.SESSION_COOKIE_NAME, path="/")
+    return SessionStatus(authenticated=False)
+
+
 # ---------------------------------------------------------------------------
-# --- /health (global application status) ---
+# /health (global application status; intentionally unauthenticated)
 # ---------------------------------------------------------------------------
+
 
 @app.get(
     "/health",
@@ -188,19 +350,24 @@ def _auth_required() -> None:
     summary="Application and integration health status",
     description="Return overall application status including environment, dashboard bind address, "
     "and whether Ollama/research are configured.  Always bound to loopback.",
-    responses={
-        401: {"model": DashboardError, "description": "Authentication required"},
-    },
 )
 async def api_health(settings: Settings = Depends(get_settings)) -> DashboardHealth:
-    """Global application health — no project or guild scoping required."""
+    """Global application health - no project or guild scoping required."""
+    database_healthy = True
+    try:
+        get_conn().execute("SELECT 1").fetchone()
+    except Exception:  # pragma: no cover - catastrophic DB failure
+        database_healthy = False
+
     return DashboardHealth(
         app_env=settings.app_env,
         app_log_level=settings.app_log_level,
+        database_healthy=database_healthy,
         dashboard_bound_host=settings.dashboard_bind_host,
         dashboard_bound_port=settings.dashboard_bind_port,
         ollama_configured=settings.ollama_model is not None,
         research_configured=settings.research_provider is not None,
+        uptime_seconds=round(time.monotonic() - _STARTED_AT, 3),
     )
 
 
@@ -208,50 +375,46 @@ async def api_health(settings: Settings = Depends(get_settings)) -> DashboardHea
 # --- Project listing & detail ---
 # ---------------------------------------------------------------------------
 
+
 @app.get(
     "/projects",
-    response_model=List[ProjectListItem],
+    response_model=list[ProjectListItem],
     summary="List authorized projects",
-    description="Return a paginated list of projects the authenticated user is authorized to view. "
-    "Requires central authorization (Phase 5).",
+    description="Return a paginated list of projects the authenticated user is authorized to view.",
     responses={401: {"model": DashboardError}, 403: {"model": DashboardError}},
 )
 async def api_project_list(
     pagination: PaginationParams = Depends(),
     search: ProjectSearchParams = Depends(),
-    auth: AuthChecker = Depends(get_auth_checker),
-) -> List[ProjectListItem]:
+    auth: AuthorizationChecker = Depends(get_auth_checker),
+) -> list[ProjectListItem]:
     """List projects the user is authorized to see."""
-    # Central auth — this method raises AuthorizationError if denied
-    auth.check_user_guild_channel()  # ensures user is in a guild/channel context
+    auth.check_user_guild_channel()
 
-    # Build query: list all projects, then filter by optional search
-    all_projects = list_proj_repo(conn=get_conn())  # type: ignore[arg-type]
-
-    # Apply name filter
+    conn = get_conn()
+    projects = repo.list_projects(conn)
     if search.name:
-        all_projects = [p for p in all_projects if search.name.lower() in p.name.lower()]
+        needle = search.name.lower()
+        projects = [p for p in projects if needle in p.name.lower()]
 
-    # Apply status filter
-    if search.status:
-        all_projects = [p for p in all_projects if p.status == search.status]
-
-    # Pagination
-    total = len(all_projects)
-    start = (pagination.page - 1) * pagination.per_page
-    end = start + pagination.per_page
-    page_projects = all_projects[start:end]
-
-    return [
-        ProjectListItem(
-            id=p.id,
-            name=p.name,
-            allowed_root=p.allowed_root,
-            status=p.status,
-            last_checked=p.updated_at_utc,
+    items: list[ProjectListItem] = []
+    for project in projects:
+        snapshot = repo.get_latest_health_snapshot(conn, project.id)
+        items.append(
+            ProjectListItem(
+                id=project.id,
+                name=project.name,
+                allowed_root=project.allowed_root,
+                status=_health_status(snapshot[0] if snapshot else None),
+                last_checked=snapshot[1] if snapshot else project.updated_at_utc,
+            )
         )
-        for p in page_projects
-    ]
+
+    if search.status:
+        items = [item for item in items if item.status == search.status]
+
+    start = (pagination.page - 1) * pagination.per_page
+    return items[start : start + pagination.per_page]
 
 
 @app.get(
@@ -259,7 +422,7 @@ async def api_project_list(
     response_model=ProjectDetail,
     summary="Get project detail",
     description="Return full detail for a single project, including milestone and evidence counts, "
-    "Discord mapping count, and health freshness.  Requires project-level authorization.",
+    "Discord mapping count, and health freshness.",
     responses={
         401: {"model": DashboardError},
         403: {"model": DashboardError},
@@ -268,131 +431,93 @@ async def api_project_list(
 )
 async def api_project_detail(
     project_id: int,
-    auth: AuthChecker = Depends(get_auth_checker),
+    auth: AuthorizationChecker = Depends(get_auth_checker),
 ) -> ProjectDetail:
     """Return detail for a single project."""
-    # Central authorization: check project access
-    auth.check_project_access(project_id)  # raises AuthorizationError if denied
+    auth.check_project_access(project_id)
 
-    from project_intelligence.storage.database import _utc_now  # noqa: PLC0415
+    conn = get_conn()
+    project = repo.get_project_by_id(conn, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
-    # Look up project from DB
-    from project_intelligence.storage.repositories import get_project_by_root  # noqa: PLC0415
-
-    row = conn.execute(  # type: ignore[name undefined]
-        "SELECT id, name, description, allowed_root, created_at_utc, updated_at_utc FROM projects WHERE id = ?",
-        (project_id,),
-    ).fetchone()
-
-    if row is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    # Count milestones
-    milestones = list_milestones_for_project(conn=get_conn(), project_id=project_id)  # type: ignore[arg-type]
-    milestone_count = len(milestones)
-
-    # Count evidence
-    evidence = list_evidence_for_project(conn=get_conn(), project_id=project_id)  # type: ignore[arg-type]
-    evidence_count = len(evidence)
-
-    # Count Discord mappings
-    mappings = list_mappings_for_project(conn=get_conn(), project_id=project_id)  # type: ignore[arg-type]
-    mapping_count = len(mappings)
-
-    # Health freshness: run a quick health check
-    health_snapshot = await asyncio_get_health_snapshot(project_id, conn)  # placeholder
-
+    snapshot = repo.get_latest_health_snapshot(conn, project_id)
     return ProjectDetail(
-        id=row[0],
-        name=row[1],
-        description=row[2],
-        allowed_root=row[3],
-        status=HealthStatus(row[4]) if isinstance(row[4], str) else HealthStatus.unknown,
-        created_at_utc=row[4] or _utc_now(),
-        updated_at_utc=row[5] or _utc_now(),
-        milestone_count=milestone_count,
-        evidence_count=evidence_count,
-        discord_mappings=mapping_count,
-        health_freshness="unknown",  # to be filled by real health engine later
+        id=project.id,
+        name=project.name,
+        description=project.description,
+        allowed_root=project.allowed_root,
+        status=_health_status(snapshot[0] if snapshot else None),
+        created_at_utc=project.created_at_utc,
+        updated_at_utc=project.updated_at_utc,
+        milestone_count=len(repo.list_milestones_for_project(conn, project_id)),
+        evidence_count=len(repo.list_evidence_for_project(conn, project_id)),
+        discord_mappings=len(repo.list_mappings_for_project(conn, project_id)),
+        health_freshness=_health_freshness(snapshot[1]) if snapshot else "unknown",
     )
-
-
-async def asyncio_get_health_snapshot(project_id: int, conn) -> dict:
-    """Placeholder: integrate real health engine later."""
-    return {"status": "unknown", "checked_at_utc": _utc_now(), "git_head": None, "git_dirty": 0}
 
 
 # ---------------------------------------------------------------------------
 # --- Milestones ---
 # ---------------------------------------------------------------------------
 
+
 @app.get(
     "/projects/{project_id}/milestones",
-    response_model=List[MilestoneListItem],
+    response_model=list[MilestoneListItem],
     summary="List milestones for a project",
-    description="Return milestones for the given project.  Requires project-level authorization.",
     responses={401: {"model": DashboardError}, 403: {"model": DashboardError}},
 )
 async def api_list_milestones(
     project_id: int,
-    auth: AuthChecker = Depends(get_auth_checker),
-) -> List[MilestoneListItem]:
-    """List milestones for a project."""
-    auth.check_project_access(project_id)  # raises AuthorizationError if denied
-
-    ms = list_milestones_for_project(conn=get_conn(), project_id=project_id)  # type: ignore[arg-type]
+    auth: AuthorizationChecker = Depends(get_auth_checker),
+) -> list[MilestoneListItem]:
+    auth.check_project_access(project_id)
+    milestones = repo.list_milestones_for_project(get_conn(), project_id)
     return [
         MilestoneListItem(
             id=m.id,
             project_id=m.project_id,
             title=m.title,
-            status=m.status,
+            status=_milestone_status(m.status),
             target_date=m.target_date_utc,
         )
-        for m in ms
+        for m in milestones
     ]
 
 
 @app.post(
     "/projects/{project_id}/milestones",
     response_model=MilestoneSummary,
-    summary="Create a milestone (owner only)",
-    description="Create a new milestone for a project.  Owner authorization enforced via "
-    "Phase-5 central checker.  Returns the created milestone summary.",
-    responses={
-        401: {"model": DashboardError},
-        403: {"model": DashboardError},
-        404: {"model": DashboardError},
-    },
+    status_code=status.HTTP_201_CREATED,
+    summary="Create or update a milestone",
+    description="State-changing endpoint.  Cookie sessions are not accepted for writes; "
+    "this requires Discord interaction context.",
+    responses={401: {"model": DashboardError}, 403: {"model": DashboardError}},
 )
-async def api_create_milestone(
+async def api_upsert_milestone(
     project_id: int,
-    title: str,
-    description: Optional[str] = None,
-    status: MilestoneStatus = MilestoneStatus.open,
-    target_date: Optional[str] = None,
-    auth: AuthChecker = Depends(get_auth_checker),
+    payload: MilestoneCreate,
+    auth: AuthorizationChecker = Depends(get_auth_checker),
 ) -> MilestoneSummary:
-    """Create a new milestone (owner-only)."""
-    auth.check_owner_or_project(project_id)  # raises AuthorizationError if not owner
-
-    # Persist via repository
-    row = conn.execute(  # type: ignore[name undefined]
-        """
-        INSERT INTO milestones (project_id, title, description, status, target_date_utc, created_at_utc)
-        VALUES (?, ?, ?, ?, ?, ?)
-        RETURNING id, project_id, title, description, status, target_date_utc, created_at_utc
-        """,
-        (project_id, title, description, status.value, target_date, _utc_now()),
-    ).fetchone()
-
+    auth.check_project_access(project_id)
+    conn = get_conn()
+    milestone = repo.upsert_milestone(
+        conn,
+        project_id=project_id,
+        title=payload.title,
+        description=payload.description,
+        status=payload.status.value,
+        target_date_utc=payload.target_date,
+    )
+    conn.commit()
     return MilestoneSummary(
-        id=row[0],
-        project_id=row[1],
-        title=row[2],
-        description=row[3],
-        status=MilestoneStatus(row[4]),
-        target_date=row[5],
+        id=milestone.id,
+        title=milestone.title,
+        description=milestone.description,
+        status=_milestone_status(milestone.status),
+        target_date=milestone.target_date_utc,
+        created_at=milestone.created_at_utc,
     )
 
 
@@ -400,69 +525,63 @@ async def api_create_milestone(
 # --- Evidence ---
 # ---------------------------------------------------------------------------
 
+
 @app.get(
     "/projects/{project_id}/evidence",
-    response_model=List[EvidenceSummary],
+    response_model=list[EvidenceSummary],
     summary="List evidence for a project",
-    description="Return evidence records for a project.  Requires project-level authorization.",
     responses={401: {"model": DashboardError}, 403: {"model": DashboardError}},
 )
 async def api_list_evidence(
     project_id: int,
-    auth: AuthChecker = Depends(get_auth_checker),
+    auth: AuthorizationChecker = Depends(get_auth_checker),
     pagination: PaginationParams = Depends(),
-) -> List[EvidenceSummary]:
-    """List evidence for a project."""
-    auth.check_project_access(project_id)  # raises AuthorizationError if denied
-
-    ev = list_evidence_for_project(conn=get_conn(), project_id=project_id)  # type: ignore[arg-type]
+) -> list[EvidenceSummary]:
+    auth.check_project_access(project_id)
+    evidence = repo.list_evidence_for_project(get_conn(), project_id)
+    start = (pagination.page - 1) * pagination.per_page
     return [
         EvidenceSummary(
             id=e.id,
-            project_id=e.project_id,
             title=e.title,
             content_hash=e.content_hash,
             retrieved_at_utc=e.retrieved_at_utc,
-            confidence=e.confidence,
-            is_stale=e.is_stale,
+            confidence=_clamp_unit(e.confidence),
+            is_stale=bool(e.is_stale),
         )
-        for e in ev
+        for e in evidence[start : start + pagination.per_page]
     ]
 
 
 @app.get(
     "/projects/{project_id}/evidence/{evidence_id}",
     response_model=EvidenceDetail,
-    summary="Get evidence detail",
-    description="Return full detail for a single evidence record, linked to its source.",
-    responses={401: {"model": DashboardError}, 403: {"model": DashboardError}, 404: {"model": DashboardError}},
+    summary="Get one evidence record",
+    responses={
+        401: {"model": DashboardError},
+        403: {"model": DashboardError},
+        404: {"model": DashboardError},
+    },
 )
 async def api_evidence_detail(
     project_id: int,
     evidence_id: int,
-    auth: AuthChecker = Depends(get_auth_checker),
+    auth: AuthorizationChecker = Depends(get_auth_checker),
 ) -> EvidenceDetail:
-    """Return detail for a single evidence record."""
-    auth.check_project_access(project_id)  # raises AuthorizationError if denied
-
-    row = conn.execute(  # type: ignore[name undefined]
-        "SELECT id, project_id, source_id, title, content_hash, retrieved_at_utc, confidence, claim, is_stale, relevance_score FROM evidence WHERE id = ? AND project_id = ?",
-        (evidence_id, project_id),
-    ).fetchone()
-
-    if row is None:
-        raise HTTPException(status_code=404, detail="Evidence not found for this project")
-
+    auth.check_project_access(project_id)
+    evidence = repo.get_evidence(get_conn(), project_id, evidence_id)
+    if evidence is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
     return EvidenceDetail(
-        id=row[0],
-        project_id=row[1],
-        title=row[3],
-        content_hash=row[4],
-        retrieved_at_utc=row[5],
-        confidence=row[6] or 1.0,
-        claim=row[7],
-        is_stale=bool(row[8]),
-        relevance_score=row[9] or 0.0,
+        id=evidence.id,
+        project_id=evidence.project_id,
+        title=evidence.title,
+        content_hash=evidence.content_hash,
+        retrieved_at_utc=evidence.retrieved_at_utc,
+        confidence=_clamp_unit(evidence.confidence),
+        claim=evidence.claim,
+        is_stale=bool(evidence.is_stale),
+        relevance_score=_clamp_unit(evidence.relevance_score),
     )
 
 
@@ -470,96 +589,36 @@ async def api_evidence_detail(
 # --- Recent activity ---
 # ---------------------------------------------------------------------------
 
+
 @app.get(
     "/activity/recent",
-    response_model=List[ActivityEntry],
+    response_model=list[ActivityEntry],
     summary="Recent activity across projects",
-    description="Return recent activity notes, milestones, evidence updates, and research jobs. "
-    "Requires central authorization.",
-    responses={401: {"model": DashboardError}},
+    description="Return the most recent notes (newest first).",
+    responses={401: {"model": DashboardError}, 403: {"model": DashboardError}},
 )
 async def api_recent_activity(
-    auth: AuthChecker = Depends(get_auth_checker),
-    limit: int = 50,
-) -> List[ActivityEntry]:
-    """Return recent activity across all authorized projects."""
-    auth.check_user_guild_channel()  # ensures user is in a guild/channel context
-
-    # Pull notes, milestones, and evidence recent entries via raw SQL for speed
-    conn_local = get_conn()
-    try:
-        rows = conn_local.execute(
-            """
-            SELECT id, 'note' AS type, project_id, content AS title,
-                   created_at_utc AS occurred_at_utc,
-                   (SELECT discord_user_id FROM authorized_users WHERE project_id = p.id LIMIT 1) AS actor,
-                   '' AS metadata
-            FROM notes n
-            JOIN projects p ON n.project_id = p.id
-            ORDER BY created_at_utc DESC
-            LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
-
-        activity = []
-        for r in rows:
-            activity.append(
-                ActivityEntry(
-                    id=r[0],
-                    type=ActivityType.note,
-                    project_id=r[1] if r[1] else None,
-                    title=r[2] or "Untitled note",
-                    occurred_at_utc=r[3],
-                    actor=r[4],
-                    metadata={},
-                )
-            )
-        return activity
-    finally:
-        close()
-
-
-# ---------------------------------------------------------------------------
-# --- Global error handlers ---
-# ---------------------------------------------------------------------------
-
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
-    """Secret-free error rendering: never echo raw secrets or stack traces."""
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "error": exc.detail.split(":")[0] if ":" in exc.detail else "error",
-            "message": exc.detail,
-            "correlation_id": getattr(request, "state", {}).get("correlation_id", None),
-            "timestamp_utc": datetime.now(timezone.utc).isoformat() + "Z",
-        },
+    auth: AuthorizationChecker = Depends(get_auth_checker),
+    pagination: PaginationParams = Depends(),
+) -> list[ActivityEntry]:
+    auth.check_user_guild_channel()
+    rows = (
+        get_conn()
+        .execute(
+            "SELECT id, project_id, content, discord_user_id, created_at_utc "
+            "FROM notes ORDER BY created_at_utc DESC, id DESC LIMIT ?",
+            (pagination.per_page,),
+        )
+        .fetchall()
     )
-
-
-@app.exception_handler(AuthorizationError)
-async def auth_exception_handler(request: Request, exc: AuthorizationError):
-    """Authorization errors are private; return ephemeral 403."""
-    return JSONResponse(
-        status_code=status.HTTP_403_FORBIDDEN,
-        content={
-            "error": "forbidden",
-            "message": exc.detail if hasattr(exc, "detail") else "Access denied",
-            "correlation_id": getattr(request, "state", {}).get("correlation_id", None),
-            "timestamp_utc": datetime.now(timezone.utc).isoformat() + "Z",
-        },
-    )
-
-
-# ---------------------------------------------------------------------------
-# --- Startup validation ( Phase 5 authz integration placeholder) ---
-# ---------------------------------------------------------------------------
-
-# The actual Discord-interaction authentication is wired in the bot layer.
-# This dashboard binds to 127.0.0.1 by design; any remote access must go
-# through Tailscale Serve with application-level authentication (Phase 8).
-# See docs/SECURITY.md for the full threat model and access policy.
-
-# ---- Run uvicorn from command line ----
-# uvicorn project_intelligence.dashboard.dashboard:app --host 127.0.0.1 --port 8765 --limit-concurrency 100
+    return [
+        ActivityEntry(
+            id=row[0],
+            type=ActivityType.note,
+            project_id=row[1],
+            title=(row[2] or "")[:80],
+            occurred_at_utc=row[4],
+            actor=f"<@{row[3]}>" if row[3] else "system",
+        )
+        for row in rows
+    ]

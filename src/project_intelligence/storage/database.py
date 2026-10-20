@@ -12,30 +12,39 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from datetime import UTC, datetime
+from importlib import import_module
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from ..config import Settings
 
 _LOCK = threading.Lock()
-_CONN: Optional[sqlite3.Connection] = None
-_SETTINGS: Optional[Settings] = None
+_CONN: sqlite3.Connection | None = None
+_CONN_PATH: Path | None = None
 
 
 def _ensure_conn(settings: Settings) -> sqlite3.Connection:
     """Create or return the active SQLite connection, applying pending migrations."""
-    global _CONN, _SETTINGS
+    global _CONN, _CONN_PATH
 
     with _LOCK:
-        if _CONN is not None and _SETTINGS is settings:
+        db_path = (
+            Path(settings.database_path) if settings.database_path else Path("data/db.sqlite3")
+        )
+        if _CONN is not None and db_path == _CONN_PATH:
             return _CONN
 
-        db_path = Path(settings.database_path) if settings.database_path else Path("data/db.sqlite3")
+        # Settings or database path changed: close the previous connection.
+        if _CONN is not None:
+            _CONN.close()
+            _CONN = None
+
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
         _CONN = sqlite3.connect(str(db_path), check_same_thread=False)
         _CONN.row_factory = sqlite3.Row
-        _SETTINGS = settings
+        _CONN_PATH = db_path
 
         _apply_migrations(_CONN, db_path)
 
@@ -62,13 +71,10 @@ def _apply_migrations(conn: sqlite3.Connection, db_path: Path) -> None:
         if name in applied:
             continue
         # Each migration module must expose an `up` function.
-        if not hasattr(mf, "up"):  # pragma: no cover - runtime check
-            from importlib import import_module
-
-            mod = import_module(f"project_intelligence.storage.migrations.{mf.stem}")
-            up_fn = getattr(mod, "up")
-        else:
-            up_fn = mf.up  # type: ignore[attr-defined]
+        mod = import_module(f"project_intelligence.storage.migrations.{name}")
+        up_fn = getattr(mod, "up", None)
+        if up_fn is None:
+            raise RuntimeError(f"Migration {name} does not define up(conn)")
 
         try:
             up_fn(conn)
@@ -96,9 +102,7 @@ def _create_schema_migrations_table(conn: sqlite3.Connection) -> None:
 def _get_applied_migrations(conn: sqlite3.Connection) -> set[str]:
     """Return the set of migration names already recorded."""
     try:
-        rows = conn.execute(
-            "SELECT migration_name FROM schema_migrations"
-        ).fetchall()
+        rows = conn.execute("SELECT migration_name FROM schema_migrations").fetchall()
         return {row["migration_name"] for row in rows}
     except sqlite3.OperationalError:
         return set()
@@ -109,7 +113,7 @@ def _mark_migration_applied(conn: sqlite3.Connection, name: str) -> None:
     try:
         conn.execute(
             "INSERT INTO schema_migrations (migration_name, applied_at_utc) VALUES (?, ?)",
-            (name, __import__("datetime").datetime.utcnow().isoformat() + "Z"),
+            (name, datetime.now(UTC).isoformat().replace("+00:00", "Z")),
         )
         conn.commit()
     except sqlite3.OperationalError:
@@ -127,16 +131,14 @@ def get_conn() -> sqlite3.Connection:
 
 def close() -> None:
     """Close the connection (call at process shutdown)."""
-    global _CONN, _SETTINGS
+    global _CONN, _CONN_PATH
     if _CONN is not None:
         _CONN.close()
         _CONN = None
-        _SETTINGS = None
+        _CONN_PATH = None
 
 
-def transaction(
-    func: Any, *, settings: Any = None
-) -> Any:
+def transaction(func: Any, *, settings: Any = None) -> Any:
     """Execute *func* within a transaction using the active connection.
 
     If *settings* is provided, the connection is freshly ensured for those
@@ -146,7 +148,6 @@ def transaction(
     a value.  On success the transaction is committed; on any exception it is
     rolled back and the exception re-raised.
     """
-    import functools
 
     conn = _ensure_conn(settings) if settings else _get_conn_from_settings(settings)
 

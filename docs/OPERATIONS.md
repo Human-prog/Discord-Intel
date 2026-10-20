@@ -1,13 +1,38 @@
 # Operations — Discord Project Intelligence
 
-**Status:** Phase 3 (2026-10-16). Nothing runs as a service yet — configuration, tests, and the quality pipeline exist. This manual grows each phase: dashboard (Phase 7+), deployment (Phase 9), release procedures (Phase 20).
+**Status:** Phase 20 (2026-10-20). The dashboard runs as a hardened systemd service on `home3013`; live Discord, GitHub, Ollama, and OpenCode integrations remain opt-in and disabled by default.
 
 ## 1. Environments
 
-| Environment | Identity | State at bootstrap |
+| Environment | Identity | State |
 |---|---|---|
 | Development | Windows 11 workstation `DESKTOP-A32JB4P` | Active |
-| Deployment target | Ubuntu homelab `homelab3013` | Powered off (owner decision); host discovery deferred |
+| Deployment | Ubuntu homelab `home3013` — LAN `192.168.1.186`, tailnet `100.72.17.90` | Dashboard service active |
+
+### Current deployment (verified 2026-10-20)
+
+| Item | Value |
+|---|---|
+| Service | `discord-project-intelligence.service` (systemd, `Restart=on-failure`) |
+| Service account | `dpi` |
+| Application | `/opt/dpi/app` |
+| Configuration | `/etc/dpi/.env` (mode `0640`, `root:dpi`) |
+| Dashboard session secret | `/etc/dpi/session_secret` (mode `0640`, `root:dpi`) |
+| Database | `/var/lib/dpi/data/db.sqlite3` |
+| Listener | `127.0.0.1:8765` only |
+| Tailnet URL | `https://home3013.tail53635c.ts.net` (Tailscale Serve → loopback) |
+| Logs | `journalctl -u discord-project-intelligence` |
+
+Health check from the host:
+
+```bash
+curl -fsS http://127.0.0.1:8765/health
+```
+
+Dashboard sign-in uses the contents of `/etc/dpi/session_secret` as the owner
+secret. Rotating that file invalidates every existing session. Never enable
+Funnel, port forwarding, or a public reverse proxy, and preserve the existing
+OpenCode Serve route.
 
 ## 2. Development machine inventory (observed facts, 2026-10-15)
 
@@ -28,11 +53,14 @@
 
 Repository identity used in existing local repos (from `Modelbridge` history): `Human-prog <creekcraig77@gmail.com>`. This identity is used for commits in this repository (repo-local config if no global identity is set).
 
-## 3. Homelab discovery (deferred — host intentionally off)
+## 3. Homelab inventory (verified 2026-10-20)
 
-Observed at bootstrap: `homelab3013` does not resolve from the dev machine; no SSH config entry exists; `192.168.1.187` (the only host in the local SSH `known_hosts`, one entry, likely the homelab) did not answer ICMP or SSH port 22 — consistent with the host being powered off. **Assumption to confirm when online:** `192.168.1.187` is `homelab3013`.
-
-When the host is online, run the read-only discovery script **as a normal user** (no root required, makes no changes):
+`home3013` is online and reachable on the tailnet (`100.72.17.90`) and LAN
+(`192.168.1.186`). Ubuntu, Python 3.14.4, dedicated `dpi` service account,
+dashboard service enabled and active, Tailscale Serve publishing
+`https://home3013.tail53635c.ts.net` → `127.0.0.1:8765`. The existing OpenCode
+Serve route is unchanged. The read-only discovery script remains available for
+periodic re-inventory:
 
 ```bash
 scp scripts/discover_host.sh <user>@192.168.1.187:~/
@@ -55,11 +83,15 @@ tailscale version; tailscale status; tailscale serve status
 pgrep -af opencode
 ```
 
-## 4. Git remote and first push (pending owner action)
+## 4. Git remote and pushes (active)
 
-`origin` is configured as `https://github.com/Human-prog/Discord-Intel` (private, empty). **Nothing has been pushed** — pushing requires GitHub authentication that is not configured on this machine (`gh` is logged out).
+`origin` is configured as `https://github.com/Human-prog/Discord-Intel` (private).
+`main` is pushed and `gh` is authenticated as `Human-prog`. Pushing remains an
+owner-approved action; never force-push or rewrite shared history.
 
-Option A (recommended — GitHub CLI):
+If the CLI session expires, re-authenticate:
+
+Option A (GitHub CLI):
 
 ```bash
 gh auth login          # GitHub.com → HTTPS → login with a browser
@@ -84,24 +116,52 @@ python -m venv .venv                                      # once
 
 On Linux, use `.venv/bin/python` and call `ruff` / `pip-audit` directly. All of
 these gates also run in CI (`.github/workflows/ci.yml`, `ubuntu-latest`,
-installing from `requirements.lock`; least-privilege `contents: read`). The
-first CI run happens after the first push (§4). Configuration is
-environment-based with an optional `.env` file (copy `.env.example`);
-diagnostics never print secret values. There is still no long-running service
-to start — the dashboard arrives in Phase 7 and systemd units in Phase 9.
+installing from `requirements.lock`; least-privilege `contents: read`). CI runs
+on every push to `main` and on pull requests. Configuration is environment-based
+with an optional `.env` file (copy `.env.example`); diagnostics never print
+secret values. The dashboard is managed by
+`discord-project-intelligence.service`; after deploying, restart it with
+`sudo systemctl restart discord-project-intelligence` and re-check `/health`.
+
+### Updating the deployment
+
+```bash
+sudo -u dpi git -C /opt/dpi/app pull --ff-only
+sudo -u dpi /opt/dpi/app/.venv/bin/pip install -r /opt/dpi/app/requirements.lock
+sudo -u dpi /opt/dpi/app/.venv/bin/pip install --no-deps -e /opt/dpi/app
+sudo systemctl restart discord-project-intelligence
+curl -fsS http://127.0.0.1:8765/health
+```
+
+Migrations apply automatically on startup. Confirm the schema version and the
+`/health` payload, then sign in through the tailnet URL. If the service fails to
+start, inspect `journalctl -u discord-project-intelligence` and roll back to
+the previous commit.
 
 ## 6. Pending manual actions (tracked)
 
-- [ ] Push the initial commit to GitHub — owner (needs `gh auth login` or PAT; see §4)
-- [ ] When the homelab is online: run `scripts/discover_host.sh` and return the output — owner
-- [ ] Confirm homelab identity: is `192.168.1.187` = `homelab3013`? — owner
-- [x] Dependency/lock tooling decided (Phase 2): venv + editable install, third-party pins in `requirements.lock` (pip freeze). Revisit only if Linux CI reproducibility needs more (Phase 3). Resolved in Phase 3: CI installs from `requirements.lock` plus `pip install --no-deps -e .`; no additional tooling needed.
+- [x] Push the initial commit to GitHub — done 2026-10-20 (`Human-prog/Discord-Intel`)
+- [x] Bring the homelab online and run `scripts/discover_host.sh` — host now reachable
+- [x] Confirm homelab identity — `home3013` at `192.168.1.186` / `100.72.17.90`
+- [x] Dependency/lock tooling — `requirements.lock` + editable install; CI installs the lock
+- [ ] Optional: configure a live Discord bot token and owner IDs, then add the bot to the service
+- [ ] Optional: configure GitHub read-only credentials (App preferred, fine-grained token fallback)
+- [ ] Optional: install/pull the Ollama model used for local analysis
+- [ ] Rotate `/etc/dpi/session_secret` periodically (invalidates all dashboard sessions)
 
 ## 7. Rollback procedures
 
-**Phases 1–3 (current):** Bootstrap rollback = delete the repository folder; nothing outside it was changed. Configuration rollback = `git revert` the Phase 2 commit(s) (code, tests, and docs are additive; no persisted data exists yet). Phase 3 rollback = `git revert` the Phase 3 commit(s): dev tooling (Ruff/mypy/pytest-cov/pip-audit in `pyproject.toml`), the secret scanner, CI workflow, and docs are additive — removing them restores the Phase 2 baseline and changes nothing at runtime. The remote remains empty until pushed, so no remote rollback is needed. To revert a decision documented in `docs/ARCHITECTURE.md` §7, edit the decision log with owner approval.
+**Current deployment (dashboard):** stop and disable
+`discord-project-intelligence.service`, remove the unit, and `git revert` the
+release commits. If a release changed persisted data, restore the pre-release
+backup from `scripts/backup_db.py` following `docs/BACKUP_RECOVERY.md`. Never
+modify the Tailscale Serve route as part of an application rollback; the
+existing OpenCode route must remain intact. Rotating
+`/etc/dpi/session_secret` is a safe last resort for suspected session compromise.
 
-Future phases add per-phase rollback sections here and in their phase reports.
+Historical Phase 1–3 rollback notes remain in the phase reports. To revert a
+decision documented in `docs/ARCHITECTURE.md` §7, edit the decision log with
+owner approval.
 
 ## 8. Safety rules for operating this project
 

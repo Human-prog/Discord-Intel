@@ -1,16 +1,20 @@
-"""Dashboard session authentication (Phase 8).
+"""Dashboard owner-session authentication (Phase 8 / Phase 7 UI).
 
-Implements secure application authentication for the private dashboard.
-The dashboard binds to loopback (127.0.0.1) by default; remote access
-via Tailscale Serve requires explicit owner approval and application-level
-authentication in addition to tailnet membership.
+The dashboard binds to loopback (127.0.0.1) by default; remote access goes
+through Tailscale Serve, which is tailnet-only.  Tailnet membership alone is
+not application authentication, so the dashboard additionally requires an
+owner session.
 
-Design principles:
-- Local-only by default (no Tailscale changes without approval).
-- Session cookies are HttpOnly, Secure, SameSite=Strict.
-- CSRF protection on all state-changing requests.
-- Session fixation prevention and logout invalidation.
-- Application authorization required in addition to tailnet membership.
+Design:
+- The owner secret lives in ``DASHBOARD_SESSION_SECRET_FILE`` (production
+  requires this file; it is provisioned with mode 0640, root:dpi).
+- Signing in means presenting that secret once over HTTPS; the server then
+  issues a stateless, HMAC-SHA256-signed session token in an HttpOnly,
+  SameSite=Strict cookie.  No plaintext secret is stored in the cookie.
+- Tokens expire after ``SESSION_TTL_SECONDS``; rotating the secret file
+  invalidates every outstanding session.
+- Cookie-authenticated requests are accepted for safe (read-only) HTTP
+  methods only, so there are no state-changing cookie endpoints to CSRF.
 """
 
 from __future__ import annotations
@@ -18,18 +22,38 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timezone, timedelta
-from typing import Any, Optional
+import time
+from pathlib import Path
+from typing import Any
 
-from project_intelligence.config import Settings, load_settings
+from project_intelligence.config import Settings
+from project_intelligence.security.authentication import AuthContext
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+SESSION_COOKIE_NAME = "dpi_owner_session"
+SESSION_TTL_SECONDS = 30 * 24 * 3600  # 30 days
+_TOKEN_VERSION = "v1"  # noqa: S105 - token format version, not a credential
+_MIN_SECRET_LENGTH = 32
+
+
+class SessionAuthError(Exception):
+    """Raised when session authentication cannot proceed. Never contains secrets."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
 
 
 # ---------------------------------------------------------------------------
-# Session token generation
+# Session token generation (legacy helpers, still used by tests/tools)
 # ---------------------------------------------------------------------------
+
 
 def generate_session_token() -> str:
-    """Generate a cryptographically secure session token."""
+    """Generate a cryptographically secure random session token."""
     return secrets.token_urlsafe(32)
 
 
@@ -42,6 +66,7 @@ def hash_session_token(token: str) -> str:
 # CSRF token generation
 # ---------------------------------------------------------------------------
 
+
 def generate_csrf_token() -> str:
     """Generate a CSRF token for form submissions."""
     return secrets.token_urlsafe(32)
@@ -53,44 +78,144 @@ def verify_csrf_token(stored: str, provided: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Session validation (fail-closed)
+# Owner secret loading
 # ---------------------------------------------------------------------------
 
+
+def load_owner_secret(settings: Settings) -> bytes:
+    """Read and validate the owner secret from disk.
+
+    Fail-closed: raises SessionAuthError if the configured file is missing,
+    unreadable, or too short.  The file is never included in error messages.
+    """
+    secret_file = settings.dashboard_session_secret_file
+    if secret_file is None:
+        raise SessionAuthError("dashboard session secret is not configured")
+
+    path = Path(secret_file)
+    try:
+        raw = path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise SessionAuthError("dashboard session secret file is unreadable") from exc
+
+    if len(raw) < _MIN_SECRET_LENGTH:
+        raise SessionAuthError("dashboard session secret is too short")
+    return raw.encode()
+
+
+# ---------------------------------------------------------------------------
+# Stateless signed session tokens
+# ---------------------------------------------------------------------------
+
+
+def _sign(secret: bytes, payload: str) -> str:
+    return hmac.new(secret, payload.encode(), hashlib.sha256).hexdigest()
+
+
+def issue_session_token(settings: Settings) -> tuple[str, int]:
+    """Create a signed session token.
+
+    Returns ``(token, expires_at_epoch_seconds)``.  Raises SessionAuthError
+    when no usable owner secret is configured.
+    """
+    secret = load_owner_secret(settings)
+    expires = int(time.time()) + SESSION_TTL_SECONDS
+    nonce = secrets.token_urlsafe(16)
+    payload = f"{_TOKEN_VERSION}|{expires}|{nonce}"
+    token = f"{_TOKEN_VERSION}.{expires}.{nonce}.{_sign(secret, payload)}"
+    return token, expires
+
+
+def verify_session_token(token: str | None, settings: Settings) -> bool:
+    """Verify a signed session token.  Fail-closed on any problem."""
+    if not token:
+        return False
+
+    parts = token.split(".")
+    if len(parts) != 4:
+        return False
+
+    version, expires_raw, nonce, signature = parts
+    if version != _TOKEN_VERSION:
+        return False
+
+    try:
+        expires = int(expires_raw)
+    except ValueError:
+        return False
+
+    now = int(time.time())
+    if expires <= now:
+        return False
+    # Reject tokens that claim to live longer than the configured lifetime.
+    if expires > now + SESSION_TTL_SECONDS + 60:
+        return False
+
+    try:
+        secret = load_owner_secret(settings)
+    except SessionAuthError:
+        return False
+
+    expected = _sign(secret, f"{_TOKEN_VERSION}|{expires}|{nonce}")
+    return hmac.compare_digest(expected, signature)
+
+
+def verify_owner_secret(candidate: str, settings: Settings) -> bool:
+    """Constant-time comparison of a presented secret against the file."""
+    if not candidate:
+        return False
+    try:
+        secret = load_owner_secret(settings)
+    except SessionAuthError:
+        return False
+    return hmac.compare_digest(secret, candidate.encode())
+
+
+def owner_auth_context(settings: Settings) -> AuthContext:
+    """Build an owner AuthContext for a verified dashboard session.
+
+    Owner sessions bypass Discord guild/channel scoping by construction
+    (``auth_via='owner_session'``); the IDs are placeholders because there is
+    no Discord interaction behind a browser request.
+    """
+    owner_id = settings.discord_owner_user_ids[0] if settings.discord_owner_user_ids else 0
+    return AuthContext(
+        discord_user_id=owner_id,
+        discord_guild_id=0,
+        discord_channel_id=0,
+        auth_via="owner_session",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Session validation (kept for API compatibility with earlier phases)
+# ---------------------------------------------------------------------------
+
+
 def validate_session(
-    session_token: Optional[str],
+    session_token: str | None,
     *,
     settings: Settings,
 ) -> bool:
-    """Validate a session token against application settings.
-
-    Fail-closed: returns False if the token is missing, malformed,
-    or the session store is unavailable.
-    """
-    if not session_token:
-        return False
-
-    # In production, verify the token hash against a stored session.
-    # For now, any non-empty token is accepted in development mode.
-    # Production mode requires a persisted session store (added in Phase 16).
-    if settings.app_env == "production":
-        # Production requires a session store; without it, deny.
-        return False
-
-    return len(session_token) >= 32
+    """Validate a session token; fail-closed if missing, malformed, or stale."""
+    return verify_session_token(session_token, settings)
 
 
 # ---------------------------------------------------------------------------
 # Cookie configuration helpers
 # ---------------------------------------------------------------------------
 
+
 def get_cookie_security_settings(settings: Settings) -> dict[str, Any]:
     """Return secure cookie attributes based on environment."""
-    secure = settings.app_env == "production"
     return {
         "httponly": True,
-        "secure": secure,
+        # Secure cookies require HTTPS.  Production is served over Tailscale
+        # HTTPS; development over plain loopback HTTP must not set Secure or
+        # the browser would discard the cookie.
+        "secure": settings.app_env == "production",
         "samesite": "strict",
-        "max_age": settings.audit_retention_days * 24 * 3600,  # reuse audit retention
+        "max_age": SESSION_TTL_SECONDS,
         "path": "/",
     }
 
@@ -110,17 +235,18 @@ TAILNET_POLICY_DOC = """
 - Port forwarding: **NOT CONFIGURED** (no router changes).
 - Public exposure: **NONE** (no public endpoints).
 
-## Proposed access path (requires owner approval)
-1. Owner runs: `tailscale serve --bg 8765` (or equivalent for the specific Tailscale version)
-2. Dashboard becomes reachable at: https://<tailnet-host>.ts.net
-3. Application-level authentication (session cookies + CSRF) is required in addition to tailnet membership.
+## Access path (owner approved)
+1. Owner runs: `tailscale serve --bg 8765`
+2. Dashboard is reachable at: https://<tailnet-host>.ts.net
+3. Application-level authentication (owner session cookie) is required in
+   addition to tailnet membership.
 4. Tailnet policy restricts access to authorized devices only.
-5. OpenCode routes remain untouched; dashboard uses a separate path prefix.
+5. OpenCode routes remain untouched; the dashboard is a separate node route.
 
 ## Gate
-- If safe Tailscale access cannot be established without modifying unrelated services,
-  the dashboard remains local-only and this step is documented as blocked.
-- No Tailscale Serve changes will be made without explicit owner approval.
-- No Funnel, port forwarding, or public proxy will be created.
+- If safe Tailscale access cannot be established without modifying unrelated
+  services, the dashboard remains local-only and this step is documented as
+  blocked.
+- No Tailscale Serve changes are made without explicit owner approval.
+- No Funnel, port forwarding, or public proxy is created.
 """
-# dashboard/session_auth.py ends here
