@@ -50,12 +50,19 @@ class AuthorizationChecker:
           of these IDs.
         - If *required_channel_ids* is provided, the user's channel must match
           one of these IDs.
-        - If the whitelist is empty (default), the check is bypassed (but
-          project-level authorization is still required).
+        - When an argument is omitted, the configured
+          ``DISCORD_ALLOWED_GUILD_IDS`` / ``DISCORD_ALLOWED_CHANNEL_IDS``
+          lists are enforced.  An explicit empty list still bypasses the check
+          (used by callers that intentionally operate without scoping).
         - If the user's guild is not in the required list, AuthError is raised.
         """
         guild_id = self._auth.discord_guild_id
         channel_id = self._auth.discord_channel_id
+
+        if required_guild_ids is None:
+            required_guild_ids = self._settings.discord_allowed_guild_ids
+        if required_channel_ids is None:
+            required_channel_ids = self._settings.discord_allowed_channel_ids
 
         # Guild whitelist check
         if required_guild_ids and guild_id not in required_guild_ids:

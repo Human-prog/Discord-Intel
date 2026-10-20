@@ -1,0 +1,94 @@
+# systemd unit file for the Discord Project Intelligence bot
+# Location: /etc/systemd/system/discord-project-intelligence-bot.service
+#
+# The dashboard service (discord-project-intelligence.service) and the bot
+# service are independent; the bot talks to Discord and writes to the same
+# SQLite database.
+#
+# INSTALLATION (requires owner approval):
+# 1. Configure DISCORD_BOT_TOKEN, DISCORD_OWNER_USER_IDS,
+#    DISCORD_ALLOWED_GUILD_IDS, DISCORD_ALLOWED_CHANNEL_IDS and
+#    PROJECT_ALLOWED_ROOTS in /etc/dpi/.env (mode 0640, root:dpi).
+# 2. Copy this unit file to /etc/systemd/system/
+# 3. Run: sudo systemctl daemon-reload
+# 4. Run: sudo systemctl enable --now discord-project-intelligence-bot
+#
+# ROLLBACK:
+# sudo systemctl stop discord-project-intelligence-bot
+# sudo systemctl disable discord-project-intelligence-bot
+# sudo rm /etc/systemd/system/discord-project-intelligence-bot.service
+# sudo systemctl daemon-reload
+#
+# VERIFICATION:
+# sudo systemctl status discord-project-intelligence-bot
+# journalctl -u discord-project-intelligence-bot -f
+
+[Unit]
+Description=Discord Project Intelligence bot (private, owner-only commands)
+Documentation=https://github.com/Human-prog/Discord-Intel
+After=network-online.target discord-project-intelligence.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dpi
+Group=dpi
+
+# Working directory
+WorkingDirectory=/opt/dpi/app
+
+# Environment
+EnvironmentFile=/etc/dpi/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONPATH=/opt/dpi/app/src
+
+# Execution
+ExecStart=/opt/dpi/app/.venv/bin/python -m project_intelligence.discord
+ExecStop=/bin/kill -TERM $MAINPID
+
+# Restart behavior
+Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+# Graceful shutdown
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
+TasksMax=64
+
+# Security hardening (compatible with Ubuntu 22.04+)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/dpi/data /var/log/dpi
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dpi-bot
+
+[Install]
+WantedBy=multi-user.target

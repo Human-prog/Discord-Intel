@@ -1,6 +1,6 @@
 # Operations — Discord Project Intelligence
 
-**Status:** Phase 20 (2026-10-20). The dashboard runs as a hardened systemd service on `home3013`; live Discord, GitHub, Ollama, and OpenCode integrations remain opt-in and disabled by default.
+**Status:** Phase 20 (2026-10-20). The dashboard runs as a hardened systemd service on `home3013`; the Discord bot has a separate hardened unit and is enabled once `/etc/dpi/.env` carries a token, owner IDs, and allowlists. Live GitHub, Ollama, and OpenCode integrations remain opt-in and disabled by default. See `docs/DISCORD_SETUP.md`.
 
 ## 1. Environments
 
@@ -13,7 +13,8 @@
 
 | Item | Value |
 |---|---|
-| Service | `discord-project-intelligence.service` (systemd, `Restart=on-failure`) |
+| Dashboard service | `discord-project-intelligence.service` (systemd, `Restart=on-failure`) |
+| Discord bot service | `discord-project-intelligence-bot.service` (systemd, `Restart=on-failure`) |
 | Service account | `dpi` |
 | Application | `/opt/dpi/app` |
 | Configuration | `/etc/dpi/.env` (mode `0640`, `root:dpi`) |
@@ -21,7 +22,8 @@
 | Database | `/var/lib/dpi/data/db.sqlite3` |
 | Listener | `127.0.0.1:8765` only |
 | Tailnet URL | `https://home3013.tail53635c.ts.net` (Tailscale Serve → loopback) |
-| Logs | `journalctl -u discord-project-intelligence` |
+| Dashboard logs | `journalctl -u discord-project-intelligence` |
+| Bot logs | `journalctl -u discord-project-intelligence-bot` |
 
 Health check from the host:
 
@@ -125,18 +127,42 @@ secret values. The dashboard is managed by
 
 ### Updating the deployment
 
+The server has no GitHub credentials by design, so updates move as a verified
+Git bundle over Taildrop, never `git pull`.
+
+On the development machine:
+
+```powershell
+git -C "C:\Users\Arega\Desktop\Projects\Discord Project Intelligence" bundle create "$env:TEMP\dpi-main.bundle" main
+tailscale file cp "$env:TEMP\dpi-main.bundle" home3013:
+```
+
+On `home3013`:
+
 ```bash
-sudo -u dpi git -C /opt/dpi/app pull --ff-only
+sudo systemctl stop discord-project-intelligence-bot discord-project-intelligence
+sudo tailscale file get /tmp
+sudo chown dpi:dpi /tmp/dpi-main.bundle
+
+cd /opt/dpi/app
+sudo -u dpi git fetch /tmp/dpi-main.bundle main
+sudo -u dpi git merge --ff-only FETCH_HEAD
 sudo -u dpi /opt/dpi/app/.venv/bin/pip install -r /opt/dpi/app/requirements.lock
 sudo -u dpi /opt/dpi/app/.venv/bin/pip install --no-deps -e /opt/dpi/app
-sudo systemctl restart discord-project-intelligence
+
+sudo systemctl start discord-project-intelligence
+sudo systemctl start discord-project-intelligence-bot   # if configured
 curl -fsS http://127.0.0.1:8765/health
 ```
 
+Before the first bundle-based update on a checkout with local edits, park them
+with `sudo -u dpi git -C /opt/dpi/app stash push -u -m "pre-update"` and
+re-apply deliberately if still needed.
+
 Migrations apply automatically on startup. Confirm the schema version and the
-`/health` payload, then sign in through the tailnet URL. If the service fails to
-start, inspect `journalctl -u discord-project-intelligence` and roll back to
-the previous commit.
+`/health` payload, then sign in through the tailnet URL. If a service fails to
+start, inspect `journalctl -u <unit>` and roll back to the previous commit
+(e.g. `sudo -u dpi git -C /opt/dpi/app reset --hard <previous-sha>`).
 
 ## 6. Pending manual actions (tracked)
 
@@ -144,7 +170,7 @@ the previous commit.
 - [x] Bring the homelab online and run `scripts/discover_host.sh` — host now reachable
 - [x] Confirm homelab identity — `home3013` at `192.168.1.186` / `100.72.17.90`
 - [x] Dependency/lock tooling — `requirements.lock` + editable install; CI installs the lock
-- [ ] Optional: configure a live Discord bot token and owner IDs, then add the bot to the service
+- [ ] Configure the live Discord bot per `docs/DISCORD_SETUP.md` (token, owner IDs, guild/channel allowlists, allowed roots), then `sudo systemctl enable --now discord-project-intelligence-bot`
 - [ ] Optional: configure GitHub read-only credentials (App preferred, fine-grained token fallback)
 - [ ] Optional: install/pull the Ollama model used for local analysis
 - [ ] Rotate `/etc/dpi/session_secret` periodically (invalidates all dashboard sessions)

@@ -17,6 +17,7 @@ import logging
 from typing import Any, cast
 
 from project_intelligence.config import Settings, load_settings
+from project_intelligence.discord.commands import project_commands
 from project_intelligence.security import (
     DEFAULT_RATE_LIMITS,
     AuthError,
@@ -59,22 +60,12 @@ if DISCORD_AVAILABLE:
             super().__init__(command_prefix="!", intents=INTENTS)
             self.settings = settings
             self._tree = self.tree
+            # The tree check runs inside the command task, so the auth context
+            # is always attached before a command callback executes.
+            self.tree.interaction_check = self._interaction_check  # type: ignore[method-assign]
 
-        async def setup_hook(self) -> None:
-            """Register guild-scoped commands for development."""
-            if self.settings.discord_allowed_guild_ids:
-                for guild_id in self.settings.discord_allowed_guild_ids:
-                    guild = discord.Object(id=guild_id)
-                    self.tree.copy_global_to(guild=guild)
-                    await self.tree.sync(guild=guild)
-            else:
-                await self.tree.sync()
-
-        async def on_ready(self) -> None:
-            logger.info("Bot ready as %s", self.user)
-
-        async def on_interaction(self, interaction: discord.Interaction) -> None:
-            """Central authorization before command execution."""
+        async def _interaction_check(self, interaction: discord.Interaction) -> bool:
+            """Authenticate every application command before it is dispatched."""
             user_id = interaction.user.id if interaction.user else None
             guild_id = interaction.guild_id if interaction.guild else None
             channel_id = interaction.channel_id if interaction.channel else None
@@ -89,11 +80,23 @@ if DISCORD_AVAILABLE:
                 await interaction.response.send_message(
                     f"Authentication failed: {exc.message}", ephemeral=True
                 )
-                return
+                return False
 
             interaction.extras = {"auth_ctx": auth_ctx}
-            # discord.py dispatches command callbacks independently; there is
-            # no base on_interaction handler to delegate to.
+            return True
+
+        async def setup_hook(self) -> None:
+            """Register guild-scoped commands for development."""
+            if self.settings.discord_allowed_guild_ids:
+                for guild_id in self.settings.discord_allowed_guild_ids:
+                    guild = discord.Object(id=guild_id)
+                    self.tree.copy_global_to(guild=guild)
+                    await self.tree.sync(guild=guild)
+            else:
+                await self.tree.sync()
+
+        async def on_ready(self) -> None:
+            logger.info("Bot ready as %s", self.user)
 
         async def on_command_error(self, ctx: commands.Context[Any], error: Exception) -> None:
             logger.warning("Command error: %s", error)
@@ -144,12 +147,9 @@ if DISCORD_AVAILABLE:
 - `/health` - Inspect project health snapshots
 
 **Owner only:**
-- `/connect-project` - Map an approved Discord context to a project
+- `/create-project` - Register a project directory and connect it to this channel
+- `/connect-project` - Map an existing project to this channel
 - `/note` - Save a project note
-- `/research` - Start or retrieve an approved research job
-- `/discover` - Discover relevant sources or project opportunities
-- `/review` - Review project evidence or research results
-- `/report` - Generate an evidence-backed project report
 
 All replies are private (ephemeral) by default.
 """
@@ -212,8 +212,21 @@ def create_bot(settings: Settings | None = None) -> DiscordBot:
     if not DISCORD_AVAILABLE:
         raise RuntimeError("discord.py is not installed; cannot create bot")
     bot = DiscordBot(settings)
-    bot.tree.add_command(help_command)
-    bot.tree.add_command(status_command)
+    command_set: list[Any] = [help_command, status_command]
+    extra_commands: tuple[Any, ...] = (
+        project_commands.next_command,
+        project_commands.roadmap_command,
+        project_commands.blocker_command,
+        project_commands.connect_project_command,
+        project_commands.create_project_command,
+        project_commands.note_command,
+        project_commands.health_command,
+    )
+    for command in extra_commands:
+        if command is not None:
+            command_set.append(command)
+    for command in command_set:
+        bot.tree.add_command(command)
     return bot
 
 
@@ -247,3 +260,36 @@ def create_test_bot(settings: Settings | None = None) -> DiscordBot:
     if not DISCORD_AVAILABLE:
         raise RuntimeError("discord.py is not installed; cannot create bot")
     return DiscordBot(settings)
+
+
+# ---------------------------------------------------------------------------
+# Runner entrypoint
+# ---------------------------------------------------------------------------
+
+
+def main() -> None:
+    """Run the Discord bot with settings loaded from the environment.
+
+    The token is never logged; only the bot's own readiness message (user
+    name) is emitted.  Configuration refuses to load when a token is set
+    without explicit owner IDs, so this function never starts an open bot.
+    """
+    settings = load_settings()
+    logging.basicConfig(
+        level=getattr(logging, settings.app_log_level, logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+    if not DISCORD_AVAILABLE:
+        raise SystemExit("discord.py is not installed; install requirements.lock first")
+    if settings.discord_bot_token is None:
+        raise SystemExit("DISCORD_BOT_TOKEN is not configured; refusing to start")
+    if not settings.discord_owner_user_ids:
+        raise SystemExit("DISCORD_OWNER_USER_IDS is not configured; refusing to start")
+
+    bot = create_bot(settings)
+    bot.run(settings.discord_bot_token.get_secret_value(), log_handler=None)
+
+
+if __name__ == "__main__":
+    main()

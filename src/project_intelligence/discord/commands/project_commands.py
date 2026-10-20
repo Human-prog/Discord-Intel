@@ -1,8 +1,9 @@
 """Project mapping and command set (Phase 11).
 
-Implements /next, /roadmap, /blocker, /connect-project, /note, /health commands.
-All commands pass through central authorization before retrieving project data.
-Project mapping is explicit and validated; paths must remain within configured roots.
+Implements /next, /roadmap, /blocker, /connect-project, /create-project, /note,
+and /health commands.  All commands pass through central authorization before
+retrieving project data.  Project mapping is explicit and validated; paths must
+remain within configured roots.
 """
 
 from __future__ import annotations
@@ -217,6 +218,89 @@ if DISCORD_AVAILABLE:
             f"{len(MAPPED_COMMANDS)} commands.",
         )
 
+    @app_commands.command(
+        name="create-project",
+        description="Register a project directory and connect it to this channel (owner only)",
+    )
+    @app_commands.describe(
+        name="Display name for the project",
+        root="Absolute path to the project directory on the server",
+        description="Optional short description",
+    )
+    async def create_project_command(
+        interaction: discord.Interaction,
+        name: str,
+        root: str,
+        description: str = "",
+    ) -> None:
+        """Register a project and map it to the current guild/channel."""
+        auth_ctx, settings = _context(interaction)
+        if auth_ctx is None or settings is None:
+            await _reply(interaction, "Authentication required.")
+            return
+        checker = make_checker(auth_ctx, settings)
+        try:
+            checker.check_user_guild_channel()
+            if not auth_ctx.is_owner(settings):
+                raise AuthorizationError("Only owners can create projects.")
+        except AuthorizationError as exc:
+            await _reply(interaction, exc.message)
+            return
+
+        project_name = name.strip()
+        if not project_name or len(project_name) > 200:
+            await _reply(interaction, "Project name must be between 1 and 200 characters.")
+            return
+
+        candidate = Path(root.strip()).expanduser()
+        if not candidate.is_absolute():
+            await _reply(interaction, "Project root must be an absolute path.")
+            return
+        try:
+            resolved = candidate.resolve(strict=True)
+        except OSError:
+            await _reply(interaction, f"Project root was not found: {candidate}")
+            return
+        if not resolved.is_dir():
+            await _reply(interaction, f"Project root is not a directory: {resolved}")
+            return
+        if not root_is_allowed(str(resolved), settings):
+            await _reply(
+                interaction,
+                "Refusing to create the project: the root is outside the configured "
+                "PROJECT_ALLOWED_ROOTS.",
+            )
+            return
+
+        conn = get_conn()
+        project = repo.get_project_by_root(conn, str(resolved))
+        created = project is None
+        if project is None:
+            project = repo.upsert_project(
+                conn,
+                project_name,
+                description.strip() or None,
+                str(resolved),
+            )
+        for command_name in MAPPED_COMMANDS:
+            repo.upsert_discord_mapping(
+                conn,
+                project_id=project.id,
+                guild_id=auth_ctx.discord_guild_id,
+                channel_id=auth_ctx.discord_channel_id,
+                command_name=command_name,
+            )
+        conn.commit()
+
+        if created:
+            message = f"Project {project.id} ({project.name}) created and connected"
+        else:
+            message = f"Project {project.id} ({project.name}) already exists; connected"
+        await _reply(
+            interaction,
+            f"{message} to this guild/channel for {len(MAPPED_COMMANDS)} commands.",
+        )
+
     @app_commands.command(name="note", description="Save a project note")
     async def note_command(interaction: discord.Interaction, content: str) -> None:
         """Save a project note."""
@@ -297,5 +381,6 @@ else:
     roadmap_command = None  # type: ignore[assignment]
     blocker_command = None  # type: ignore[assignment]
     connect_project_command = None  # type: ignore[assignment]
+    create_project_command = None  # type: ignore[assignment]
     note_command = None  # type: ignore[assignment]
     health_command = None  # type: ignore[assignment]

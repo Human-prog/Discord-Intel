@@ -40,6 +40,23 @@ def test_empty_allowlists_bypass_the_check(app_settings) -> None:
     _checker(app_settings).check_user_guild_channel(required_guild_ids=[], required_channel_ids=[])
 
 
+def test_configured_guild_allowlist_is_enforced_by_default(make_settings) -> None:
+    settings = make_settings(discord_allowed_guild_ids=[OTHER_GUILD])
+    with pytest.raises(AuthorizationError, match="guild"):
+        _checker(settings).check_user_guild_channel()
+
+
+def test_configured_guild_allowlist_allows_the_listed_guild(make_settings) -> None:
+    settings = make_settings(discord_allowed_guild_ids=[GUILD])
+    _checker(settings).check_user_guild_channel()
+
+
+def test_configured_channel_allowlist_is_enforced_by_default(make_settings) -> None:
+    settings = make_settings(discord_allowed_channel_ids=[OTHER_CHANNEL])
+    with pytest.raises(AuthorizationError, match="channel"):
+        _checker(settings).check_user_guild_channel()
+
+
 def test_guild_allowlist_denies_other_guilds(app_settings) -> None:
     with pytest.raises(AuthorizationError, match="guild"):
         _checker(app_settings).check_user_guild_channel(required_guild_ids=[OTHER_GUILD])

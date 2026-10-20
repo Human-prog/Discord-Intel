@@ -29,7 +29,7 @@
 | 19 | Backup, restore, recovery | ✅ PASS | `phases/PHASE_19.md` | SQLite `VACUUM INTO` backups, integrity checks, retention, restore runbook. |
 | 20 | Controlled release & operational handoff | ✅ PASS | `phases/PHASE_20.md` | Dashboard deployed and verified (loopback health 200, Tailscale Serve, all tailnet devices connected). Live Discord/GitHub/Ollama integrations remain opt-in. |
 
-> Test counts in earlier phase reports are historical. The current suite is **392 tests at 97.34% branch coverage** with a 95% gate (2026-10-20).
+> Test counts in earlier phase reports are historical. The current suite is **408 tests at 97.60% branch coverage** with a 95% gate (2026-10-20).
 
 ## Phase notes and gates
 

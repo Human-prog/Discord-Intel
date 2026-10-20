@@ -43,6 +43,7 @@ def test_commands_require_an_auth_context(app_settings) -> None:
         (commands.roadmap_command.callback, ()),
         (commands.blocker_command.callback, ()),
         (commands.connect_project_command.callback, (1,)),
+        (commands.create_project_command.callback, ("Alpha", "/srv/alpha")),
         (commands.note_command.callback, ("note",)),
         (commands.health_command.callback, ()),
     ):
@@ -118,6 +119,119 @@ def test_root_is_allowed_helper(app_settings, tmp_path: Path) -> None:
     assert commands.root_is_allowed(str(allowed), app_settings) is True
     assert commands.root_is_allowed(str(tmp_path / "elsewhere"), app_settings) is False
     assert commands.root_is_allowed("relative/path", app_settings) is False
+
+
+# ---------------------------------------------------------------------------
+# /create-project
+# ---------------------------------------------------------------------------
+
+
+def _allowed_root(app_settings, name: str = "alpha") -> Path:
+    root = app_settings.project_allowed_roots[0] / name
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def test_create_project_is_owner_only(db, app_settings) -> None:
+    interaction = _interaction(app_settings, user_id=OTHER_USER_ID)
+
+    _run(
+        commands.create_project_command.callback(
+            interaction, "Alpha", str(_allowed_root(app_settings))
+        )
+    )
+
+    assert "Only owners" in interaction.last_message
+    assert repo.list_projects(db) == []
+
+
+def test_create_project_rejects_relative_root(db, app_settings) -> None:
+    interaction = _interaction(app_settings)
+
+    _run(commands.create_project_command.callback(interaction, "Alpha", "relative/path"))
+
+    assert "must be an absolute path" in interaction.last_message
+    assert repo.list_projects(db) == []
+
+
+def test_create_project_rejects_missing_root(db, app_settings, tmp_path: Path) -> None:
+    interaction = _interaction(app_settings)
+
+    _run(
+        commands.create_project_command.callback(
+            interaction, "Alpha", str(app_settings.project_allowed_roots[0] / "missing")
+        )
+    )
+
+    assert "was not found" in interaction.last_message
+    assert repo.list_projects(db) == []
+
+
+def test_create_project_rejects_file_root(db, app_settings) -> None:
+    file_root = app_settings.project_allowed_roots[0] / "not-a-dir"
+    file_root.write_text("x", encoding="utf-8")
+    interaction = _interaction(app_settings)
+
+    _run(commands.create_project_command.callback(interaction, "Alpha", str(file_root)))
+
+    assert "not a directory" in interaction.last_message
+    assert repo.list_projects(db) == []
+
+
+def test_create_project_rejects_root_outside_the_allowlist(
+    db, app_settings, tmp_path: Path
+) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    interaction = _interaction(app_settings)
+
+    _run(commands.create_project_command.callback(interaction, "Outside", str(outside)))
+
+    assert "outside the configured PROJECT_ALLOWED_ROOTS" in interaction.last_message
+    assert repo.list_projects(db) == []
+
+
+def test_create_project_registers_and_maps(db, app_settings) -> None:
+    root = _allowed_root(app_settings)
+    interaction = _interaction(app_settings)
+
+    _run(
+        commands.create_project_command.callback(
+            interaction, "  Alpha  ", str(root), "  sample project  "
+        )
+    )
+
+    assert "created and connected" in interaction.last_message
+    project = repo.get_project_by_root(db, str(root))
+    assert project is not None
+    assert project.name == "Alpha"
+    assert project.description == "sample project"
+    for name in commands.MAPPED_COMMANDS:
+        assert repo.get_mapped_project_id(db, GUILD_ID, CHANNEL_ID, name) == project.id
+
+
+def test_create_project_connects_an_existing_root(db, app_settings) -> None:
+    root = _allowed_root(app_settings)
+    interaction = _interaction(app_settings)
+
+    _run(commands.create_project_command.callback(interaction, "Alpha", str(root)))
+    _run(commands.create_project_command.callback(interaction, "Renamed", str(root)))
+
+    assert "already exists; connected" in interaction.last_message
+    assert len(repo.list_projects(db)) == 1
+
+
+def test_create_project_rejects_an_overlong_name(db, app_settings) -> None:
+    interaction = _interaction(app_settings)
+
+    _run(
+        commands.create_project_command.callback(
+            interaction, "x" * 201, str(_allowed_root(app_settings))
+        )
+    )
+
+    assert "between 1 and 200 characters" in interaction.last_message
+    assert repo.list_projects(db) == []
 
 
 # ---------------------------------------------------------------------------
