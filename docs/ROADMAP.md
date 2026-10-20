@@ -11,8 +11,8 @@
 | 1 | Repository bootstrap & environment discovery | ✅ PASS (host discovery deferred) | `phases/PHASE_01.md` | Bootstrap complete 2026-10-15. Homelab intentionally offline; read-only discovery script ready. |
 | 2 | Configuration, schemas, secure defaults | ✅ PASS | `phases/PHASE_02.md` | Typed settings, fail-closed validation, redaction, diagnostics; 59 tests passing (2026-10-15). |
 | 3 | Testing, CI, code quality | ✅ PASS | `phases/PHASE_03.md` | Ruff, mypy, 100% branch coverage gate, pip-audit, secret scanner, least-privilege CI; 83 tests passing (2026-10-16). |
-| 4 | Storage & data migrations | ⬜ Not started | — | — |
-| 5 | Authentication, authorization, threat model | ⬜ Not started | — | Gate: no Discord commands / dashboard exposure until authz tests pass. |
+| 4 | Storage & data migrations | ✅ PASS | `phases/PHASE_04.md` | SQLite layer, versioned migrations, 17 entities; 83 tests passing (2026-10-16) |
+| 5 | Authentication, authorization, threat model | ✅ PASS | `phases/PHASE_05.md` | Centralized authN/authZ, threat model, rate limits, redaction, audit events; 28 security tests passing (2026-10-16) |
 | 6 | Project health engine | ⬜ Not started | — | — |
 | 7 | Read-only dashboard API & mobile interface | ⬜ Not started | — | Loopback bind mandatory. |
 | 8 | Dashboard authentication & Tailscale access | ⬜ Not started | — | **Owner approval required** for Tailscale Serve changes. |

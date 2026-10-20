@@ -11,6 +11,12 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.7,<3",
     "pydantic-settings>=2.2,<3",
+    "discord.py>=2.3,<3",
+    # Dashboard API (Phase 7) — served by uvicorn, loopback-bind only.
+    "fastapi>=0.110,<1",
+    "uvicorn>=0.29,<1",
+    # Loopback HTTP client used by the local Ollama integration (Phase 6).
+    "httpx>=0.27,<1",
 ]
 
 [project.optional-dependencies]

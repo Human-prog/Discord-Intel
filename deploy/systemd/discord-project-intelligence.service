@@ -1,0 +1,91 @@
+# systemd unit file for Discord Project Intelligence
+# Location: /etc/systemd/system/discord-project-intelligence.service
+#
+# INSTALLATION (requires owner approval):
+# 1. Create dedicated service account: sudo useradd -r -s /usr/sbin/nologin dpi
+# 2. Create data directory: sudo mkdir -p /var/lib/dpi/data && sudo chown dpi:dpi /var/lib/dpi/data
+# 3. Copy .env to /etc/dpi/.env with mode 0640 (root:dpi)
+# 4. Copy this unit file to /etc/systemd/system/
+# 5. Run: sudo systemctl daemon-reload
+# 6. Run: sudo systemctl enable --now discord-project-intelligence
+#
+# ROLLBACK:
+# sudo systemctl stop discord-project-intelligence
+# sudo systemctl disable discord-project-intelligence
+# sudo rm /etc/systemd/system/discord-project-intelligence.service
+# sudo systemctl daemon-reload
+#
+# VERIFICATION:
+# sudo systemctl status discord-project-intelligence
+# journalctl -u discord-project-intelligence -f
+
+[Unit]
+Description=Discord Project Intelligence (private, read-only monitoring)
+Documentation=https://github.com/Human-prog/Discord-Intel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dpi
+Group=dpi
+
+# Working directory
+WorkingDirectory=/opt/dpi/app
+
+# Environment
+EnvironmentFile=/etc/dpi/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONPATH=/opt/dpi/app/src
+
+# Execution
+ExecStart=/opt/dpi/app/.venv/bin/python -m uvicorn project_intelligence.dashboard.dashboard:app --host 127.0.0.1 --port 8765 --limit-concurrency 100 --log-level info
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStop=/bin/kill -TERM $MAINPID
+
+# Restart behavior
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Graceful shutdown
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
+TasksMax=64
+
+# Security hardening (compatible with Ubuntu 22.04+)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/dpi/data /var/log/dpi
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dpi
+
+[Install]
+WantedBy=multi-user.target

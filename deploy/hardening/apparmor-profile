@@ -1,0 +1,57 @@
+# AppArmor profile for Discord Project Intelligence
+# Location: /etc/apparmor.d/dpi
+#
+# INSTALLATION (requires owner approval):
+# sudo cp deploy/hardening/apparmor-profile /etc/apparmor.d/dpi
+# sudo apparmor_parser -r /etc/apparmor.d/dpi
+# sudo aa-enforce dpi
+#
+# VERIFICATION:
+# sudo aa-status | grep dpi
+
+#include <tunables/global>
+
+/opt/dpi/app/.venv/bin/python {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+
+  # Application code (read-only)
+  /opt/dpi/app/ r,
+  /opt/dpi/app/** r,
+
+  # Data directory (read-write)
+  /var/lib/dpi/data/ r,
+  /var/lib/dpi/data/** rwk,
+
+  # Log directory (read-write)
+  /var/log/dpi/ r,
+  /var/log/dpi/** rw,
+
+  # Environment file (read-only)
+  /etc/dpi/.env r,
+
+  # Standard system libraries (read-only)
+  /usr/lib/python3*/ r,
+  /usr/lib/python3*/** r,
+  /usr/local/lib/python3*/ r,
+  /usr/local/lib/python3*/** r,
+
+  # Network (loopback only via settings, but AppArmor doesn't restrict by IP)
+  network inet stream,
+  network inet6 stream,
+  network unix stream,
+
+  # Deny everything else
+  deny /etc/shadow r,
+  deny /etc/passwd w,
+  deny /etc/group w,
+  deny /proc/*/mem rw,
+  deny /sys/** w,
+  deny /boot/** w,
+  deny /root/** rw,
+  deny /home/** w,
+  deny /tmp/** w,
+  deny /var/tmp/** w,
+  deny /dev/shm/** w,
+}
