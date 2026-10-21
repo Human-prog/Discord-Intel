@@ -24,6 +24,8 @@ Description=Discord Project Intelligence (private, read-only monitoring)
 Documentation=https://github.com/Human-prog/Discord-Intel
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
 
 [Service]
 Type=simple
@@ -47,8 +49,6 @@ ExecStop=/bin/kill -TERM $MAINPID
 # Restart behavior
 Restart=on-failure
 RestartSec=5
-StartLimitIntervalSec=60
-StartLimitBurst=3
 
 # Graceful shutdown
 TimeoutStopSec=30

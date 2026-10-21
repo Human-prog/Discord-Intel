@@ -28,6 +28,8 @@ Description=Discord Project Intelligence bot (private, owner-only commands)
 Documentation=https://github.com/Human-prog/Discord-Intel
 After=network-online.target discord-project-intelligence.service
 Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -50,8 +52,6 @@ ExecStop=/bin/kill -TERM $MAINPID
 # Restart behavior
 Restart=on-failure
 RestartSec=10
-StartLimitIntervalSec=120
-StartLimitBurst=5
 
 # Graceful shutdown
 TimeoutStopSec=30
