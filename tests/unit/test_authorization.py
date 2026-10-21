@@ -80,6 +80,20 @@ def test_channel_allowlist_allows_listed_channel(app_settings) -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_owner_session_bypasses_guild_and_channel_allowlists(make_settings) -> None:
+    settings = make_settings(
+        discord_allowed_guild_ids=[OTHER_GUILD],
+        discord_allowed_channel_ids=[OTHER_CHANNEL],
+    )
+    owner_ctx = AuthContext(
+        discord_user_id=USER,
+        discord_guild_id=0,
+        discord_channel_id=0,
+        auth_via="owner_session",
+    )
+    make_checker(owner_ctx, settings).check_user_guild_channel()  # no raise
+
+
 def test_owner_session_has_access_to_any_project(app_settings) -> None:
     owner_ctx = AuthContext(
         discord_user_id=USER,

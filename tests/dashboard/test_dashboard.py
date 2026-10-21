@@ -101,6 +101,15 @@ def test_sign_in_sets_http_only_cookie(client, app_settings) -> None:
     assert client.get("/projects").status_code == 200
 
 
+def test_owner_session_ignores_discord_allowlists(client, app_settings, monkeypatch) -> None:
+    """The browser owner session has no guild/channel and must not be scoped to them."""
+    monkeypatch.setenv("DISCORD_ALLOWED_GUILD_IDS", "222222222222222222")
+    monkeypatch.setenv("DISCORD_ALLOWED_CHANNEL_IDS", "333333333333333333")
+    _login(client, app_settings)
+    assert client.get("/projects").status_code == 200
+    assert client.get("/activity/recent").status_code == 200
+
+
 def test_source_path_does_not_touch_secure_cookie_over_http(client, app_settings) -> None:
     """Testing/dev runs on loopback HTTP, so the cookie must not be Secure."""
     _login(client, app_settings)

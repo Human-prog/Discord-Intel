@@ -56,6 +56,13 @@ class AuthorizationChecker:
           (used by callers that intentionally operate without scoping).
         - If the user's guild is not in the required list, AuthError is raised.
         """
+        # Owner sessions are established by verifying the dashboard secret and
+        # carry no Discord guild/channel context (both IDs are placeholders).
+        # They are already fully trusted and must not be checked against the
+        # Discord allowlists.
+        if self._auth.auth_via == "owner_session":
+            return
+
         guild_id = self._auth.discord_guild_id
         channel_id = self._auth.discord_channel_id
 
