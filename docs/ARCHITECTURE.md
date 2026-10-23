@@ -14,7 +14,8 @@ Modular monolith in Python — a small number of clearly separated modules insid
 | Authorization service | Central policy check: user/guild/channel/thread IDs, project ID, capability, feature enablement, read vs. mutating | Reads policy configuration; no external credentials |
 | Project router | Map guild/channel (and approved threads) to exactly one project record | Project mapping store (read); writes only via owner-authorized mapping commands |
 | GitHub adapter | Read-only retrieval of repository metadata, commits, issues, PRs, releases, CI results | GitHub App installation token (read-only, scoped repos) |
-| Research pipeline | Search, retrieve, normalize, deduplicate, score, report external sources | Outbound network (validated URLs only); research provider credential |
+| Research pipeline | Local knowledge search plus optional web search, retrieve, normalize, deduplicate, score, and cited reports | Local database read; optional outbound network (validated URLs only) and provider credential |
+| Catalog scanner/importer | Read-only workstation scan into portable JSON; idempotent server import of projects and Git work items | Workstation source-tree read; server database write |
 | Local model adapter | Ollama calls, schema-validated structured outputs, evidence-only fallback | Loopback Ollama endpoint only; minimized, redacted evidence |
 | OpenCode adapter | Future controlled agent tasks — disabled by default, read-only first | Scoped worktree only; no application secrets |
 | Scheduler | Due health checks, cache refreshes, scheduled reports | Job-scoped permissions only |
@@ -84,7 +85,7 @@ Where SQLite cannot provide a clean read-only dashboard path, a narrow read-only
 ## 6. Data flows
 
 - **Project-status request:** authorized Discord user → authorization check → channel→project mapping → approved evidence retrieval (GitHub/local) → evidence summary → optional local Ollama analysis → schema-validated response → authorized output (ephemeral by default).
-- **Research request:** authorized request → input validation → privacy sanitization → provider searches → safe retrieval (SSRF-controlled) → normalized records → dedup/scoring → local analysis → report with citations and verification limitations.
+- **Research request:** authorized request → input validation → persisted job → local keyword scoring over catalog/notes/work/research, and/or provider searches → safe retrieval (SSRF-controlled) → normalized records → dedup/scoring → report with stable citations and verification limitations → dashboard and Discord delivery.
 - **Dashboard request:** authorized device → Tailscale Serve → loopback-bound dashboard → application authentication → read-only data → response.
 - **Future OpenCode request (disabled):** authorized user → job validation → owner approval gate → isolated worker with scoped worktree → captured results → verification → audit log → user review.
 
@@ -106,6 +107,8 @@ Retrieved web/GitHub/Discord content and model output are untrusted data in ever
 | 2026-10-16 | Coverage gate `fail_under = 95` while actual coverage is 100% branch | Small buffer for platform-specific branches in later phases without weakening the gate |
 | 2026-10-16 | mypy requires full annotations in `src/` and `scripts/`; test functions may omit signatures (bodies still checked) | pytest fixture/parameter conventions; keeps type safety where it matters most |
 | 2026-10-16 | CI installs from `requirements.lock` + `pip install --no-deps -e .`; pip upgraded before audit | Reproducible installs without resolver drift; pip-audit reports only real dependency findings |
+| 2026-10-23 | Catalog projects are deduplicated by `sha256(normcase(real_path))` and imported with `monitored=0` | Windows paths do not exist on the Linux server; the live `/opt/dpi/app` project remains the health-check target |
+| 2026-10-23 | Research is persisted per job with local/web scopes; web search is a pluggable provider behind the SSRF-safe fetcher | Failures stay visible in the dashboard, local research works offline, and web research remains opt-in |
 
 ## 8. Trust boundaries (summary; expanded in `docs/THREAT_MODEL.md`, Phase 5)
 

@@ -16,8 +16,20 @@ CHANNEL_ID = 333_333_333_333_333_333
 class FakeResponse:
     def __init__(self) -> None:
         self.messages: list[tuple[str, bool]] = []
+        self.deferred = False
 
     async def send_message(self, message: str, ephemeral: bool = False) -> None:
+        self.messages.append((message, ephemeral))
+
+    async def defer(self, *, ephemeral: bool = False, thinking: bool = False) -> None:
+        self.deferred = True
+
+
+class FakeFollowup:
+    def __init__(self) -> None:
+        self.messages: list[tuple[str, bool]] = []
+
+    async def send(self, message: str, ephemeral: bool = False) -> None:
         self.messages.append((message, ephemeral))
 
 
@@ -42,6 +54,7 @@ class FakeInteraction:
         self.channel = object() if has_guild else None
         self.client = SimpleNamespace(settings=settings)
         self.response = FakeResponse()
+        self.followup = FakeFollowup()
         self.extras: dict[str, object] = {}
         if has_auth:
             self.extras["auth_ctx"] = AuthContext(
@@ -53,8 +66,10 @@ class FakeInteraction:
 
     @property
     def last_message(self) -> str:
+        if self.followup.messages:
+            return self.followup.messages[-1][0]
         return self.response.messages[-1][0]
 
     @property
     def message_count(self) -> int:
-        return len(self.response.messages)
+        return len(self.response.messages) + len(self.followup.messages)

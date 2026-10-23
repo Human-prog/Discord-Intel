@@ -58,6 +58,18 @@ PROJECT_ALLOWED_ROOTS=/opt/dpi/app
 Add more comma-separated roots only for directories you want the health engine
 to inspect; the bot cannot register anything outside this list.
 
+Optional research settings (local research works without either of these):
+
+```dotenv
+RESEARCH_PROVIDER=tavily          # none | tavily | brave
+RESEARCH_API_KEY=<provider key>
+DASHBOARD_PUBLIC_URL=https://home3013.tail53635c.ts.net
+```
+
+`DASHBOARD_PUBLIC_URL` is tailnet-only and is used for the “full report” link
+in Discord replies. Keep `RESEARCH_ALLOWED_DOMAINS` empty to let the provider
+choose domains, or set a comma-separated allowlist to restrict web fetching.
+
 Keep the file at mode `0640`, owner `root`, group `dpi`:
 
 ```bash
@@ -104,7 +116,15 @@ dashboard. Useful follow-ups:
 | `/health` | Runs a read-only Git health check and stores a snapshot |
 | `/note content:...` | Adds a note that shows up in dashboard activity |
 | `/roadmap` | Lists milestones for the mapped project |
+| `/research question:... scope:local\|web\|both` | Runs a cited research job; `both` still completes with local results when web is not configured |
 | `/connect-project project_id:<id>` | Maps an existing project to another channel |
+
+`/research` uses the project mapped to the current channel unless
+`project_id` is supplied. It defers the reply, then posts a compact report with
+citation keys such as `project:3`, `note:12`, or `work:44`. The full report is
+saved in the dashboard and linked as `#research-<job_id>`. Ask for `scope:local`
+to keep the job entirely on the server; `scope:web` fails closed when no
+provider and API key are configured.
 
 ## 7. Troubleshooting
 
@@ -116,6 +136,10 @@ dashboard. Useful follow-ups:
   `DISCORD_ALLOWED_CHANNEL_IDS`.
 - **`Refusing to create the project`** — the resolved path is outside
   `PROJECT_ALLOWED_ROOTS` or does not exist as a directory readable by `dpi`.
+- **`Web research is not configured`** — set `RESEARCH_PROVIDER` to `tavily`
+  or `brave` and add `RESEARCH_API_KEY` in `/etc/dpi/.env`, then restart the
+  bot. Use `scope:local` (or plain `/research` with no provider) to search the
+  imported catalog, notes, and work history without external access.
 - **Service exits immediately** — inspect
   `journalctl -u discord-project-intelligence-bot -n 50 --no-pager`. The most
   common causes are a token without owner IDs, an invalid token, or a missing

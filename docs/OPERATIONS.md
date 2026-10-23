@@ -22,6 +22,9 @@
 | Database | `/var/lib/dpi/data/db.sqlite3` |
 | Listener | `127.0.0.1:8765` only |
 | Tailnet URL | `https://home3013.tail53635c.ts.net` (Tailscale Serve → loopback) |
+| Report links | `DASHBOARD_PUBLIC_URL=https://home3013.tail53635c.ts.net` |
+| Workstation catalog | `29` projects / `99` work items (catalog-only, `monitored=0`) |
+| Web research | Off until `RESEARCH_PROVIDER` + `RESEARCH_API_KEY` are set; local research always available |
 | Dashboard logs | `journalctl -u discord-project-intelligence` |
 | Bot logs | `journalctl -u discord-project-intelligence-bot` |
 
@@ -159,23 +162,102 @@ Before the first bundle-based update on a checkout with local edits, park them
 with `sudo -u dpi git -C /opt/dpi/app stash push -u -m "pre-update"` and
 re-apply deliberately if still needed.
 
-Migrations apply automatically on startup. Confirm the schema version and the
-`/health` payload, then sign in through the tailnet URL. If a service fails to
-start, inspect `journalctl -u <unit>` and roll back to the previous commit
-(e.g. `sudo -u dpi git -C /opt/dpi/app reset --hard <previous-sha>`).
+Migrations apply automatically on startup. Migration `003_catalog_and_research`
+adds catalog fields, work items, repeated research jobs, cited sources, and one
+report per job. Back up the database before a release that changes the schema:
 
-## 6. Pending manual actions (tracked)
+```bash
+sudo -u dpi /opt/dpi/app/.venv/bin/python /opt/dpi/app/scripts/backup_db.py
+```
+
+Confirm the schema version and the `/health` payload, then sign in through the
+tailnet URL. If a service fails to start, inspect `journalctl -u <unit>` and
+roll back to the previous commit (e.g.
+`sudo -u dpi git -C /opt/dpi/app reset --hard <previous-sha>`). Restore the
+pre-release database if the rollback must also undo migration 003.
+
+## 6. Workstation catalog and research
+
+The catalog makes every project on the Windows workstation visible in DPI
+without copying source code to the server. The scanner is read-only and skips
+generated skill folders, caches, and other internal trees. It records Git
+metadata, bounded README/manifest excerpts, technology markers, category
+folders, and recent commits.
+
+On the Windows development machine:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\catalog_projects.py `
+  --root "C:\Users\Arega\Desktop\Projects" `
+  --output "$env:TEMP\dpi-catalog.json" `
+  --max-commits 8 --verbose
+tailscale file cp "$env:TEMP\dpi-catalog.json" home3013:
+```
+
+On `home3013`:
+
+```bash
+sudo tailscale file get /tmp
+sudo chown dpi:dpi /tmp/dpi-catalog.json
+sudo -u dpi /opt/dpi/app/.venv/bin/python /opt/dpi/app/scripts/import_catalog.py \
+  --catalog /tmp/dpi-catalog.json
+rm /tmp/dpi-catalog.json
+curl -fsS http://127.0.0.1:8765/health
+```
+
+Import is idempotent: projects match by `catalog_key` (a hash of the resolved
+real path), and Git work items match by commit hash. Re-run the scanner and
+importer after adding projects or committing work. Catalog projects have
+`monitored=0` because their Windows paths do not exist on the server; the
+manually registered `/opt/dpi/app` project remains the live health-check target.
+Category-folder junctions are deduplicated to the real project path.
+
+Research has two independent paths:
+
+- **Local** uses transparent keyword scoring over catalog projects, work items,
+  notes, and prior research. It never leaves the server and needs no provider.
+- **Web** uses Tavily or Brave for candidate URLs and then re-validates every
+  URL, DNS answer, redirect, and response size through the SSRF-safe fetcher.
+  Production fetches require HTTPS.
+
+Configure web research only if needed:
+
+```dotenv
+RESEARCH_PROVIDER=tavily
+RESEARCH_API_KEY=<provider key>
+RESEARCH_ALLOWED_DOMAINS=          # empty lets the provider choose
+DASHBOARD_PUBLIC_URL=https://home3013.tail53635c.ts.net
+```
+
+Set these in `/etc/dpi/.env` (mode `0640`, `root:dpi`), never in the repository,
+and never print the key in logs or chat. Restart both units after a configuration
+change:
+
+```bash
+sudo systemctl restart discord-project-intelligence discord-project-intelligence-bot
+```
+
+In Discord, `/research question:... scope:local|web|both` defaults to `both`.
+If web is not configured, `both` completes with local findings and a visible
+skip note; `web` fails closed. The full cited report is stored in the dashboard
+and linked as `#research-<job_id>`. The dashboard **Research** tab lists jobs,
+sources, retrieval timestamps, and reports; the **Projects** tab shows catalog
+status, technology, work history, and recent research.
+
+## 7. Pending manual actions (tracked)
 
 - [x] Push the initial commit to GitHub — done 2026-10-20 (`Human-prog/Discord-Intel`)
 - [x] Bring the homelab online and run `scripts/discover_host.sh` — host now reachable
 - [x] Confirm homelab identity — `home3013` at `192.168.1.186` / `100.72.17.90`
 - [x] Dependency/lock tooling — `requirements.lock` + editable install; CI installs the lock
-- [ ] Configure the live Discord bot per `docs/DISCORD_SETUP.md` (token, owner IDs, guild/channel allowlists, allowed roots), then `sudo systemctl enable --now discord-project-intelligence-bot`
+- [x] Configure the live Discord bot per `docs/DISCORD_SETUP.md` — done 2026-10-23 (`open#0445`, guild-scoped commands)
+- [x] Import the workstation catalog — done 2026-10-23 (`29` projects, `99` work items)
+- [ ] Optional: add `RESEARCH_API_KEY` for Tavily/Brave and enable live web research
 - [ ] Optional: configure GitHub read-only credentials (App preferred, fine-grained token fallback)
 - [ ] Optional: install/pull the Ollama model used for local analysis
 - [ ] Rotate `/etc/dpi/session_secret` periodically (invalidates all dashboard sessions)
 
-## 7. Rollback procedures
+## 8. Rollback procedures
 
 **Current deployment (dashboard):** stop and disable
 `discord-project-intelligence.service`, remove the unit, and `git revert` the
@@ -189,7 +271,7 @@ Historical Phase 1–3 rollback notes remain in the phase reports. To revert a
 decision documented in `docs/ARCHITECTURE.md` §7, edit the decision log with
 owner approval.
 
-## 8. Safety rules for operating this project
+## 9. Safety rules for operating this project
 
 - Never enable Tailscale Funnel, router port forwarding, or public listeners.
 - Never modify the existing OpenCode Serve route without inspecting and preserving it first; changes require owner approval.

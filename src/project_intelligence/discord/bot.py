@@ -145,6 +145,7 @@ if DISCORD_AVAILABLE:
 - `/roadmap` - View project milestones and progress
 - `/blocker` - View or record project blockers
 - `/health` - Inspect project health snapshots
+- `/research` - Research local knowledge and the web with citations
 
 **Owner only:**
 - `/create-project` - Register a project directory and connect it to this channel
@@ -221,6 +222,7 @@ def create_bot(settings: Settings | None = None) -> DiscordBot:
         project_commands.create_project_command,
         project_commands.note_command,
         project_commands.health_command,
+        project_commands.research_command,
     )
     for command in extra_commands:
         if command is not None:

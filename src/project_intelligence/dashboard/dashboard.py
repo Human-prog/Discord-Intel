@@ -21,6 +21,7 @@ Authentication model
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -38,6 +39,7 @@ from project_intelligence.dashboard import session_auth
 from project_intelligence.dashboard.schemas import (
     ActivityEntry,
     ActivityType,
+    CatalogSummary,
     DashboardError,
     DashboardHealth,
     EvidenceDetail,
@@ -50,6 +52,10 @@ from project_intelligence.dashboard.schemas import (
     ProjectDetail,
     ProjectListItem,
     ProjectSearchParams,
+    ResearchJobDetail,
+    ResearchJobSummary,
+    ResearchSourceSummary,
+    WorkItemSummary,
 )
 from project_intelligence.security import (
     AuthContext,
@@ -229,6 +235,53 @@ def _clamp_unit(value: Any) -> float:
     return min(1.0, max(0.0, number))
 
 
+def _tech_stack(value: str | None) -> list[str]:
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [str(item) for item in parsed if str(item).strip()][:20]
+
+
+def _work_item_summary(item: repo.WorkItem) -> WorkItemSummary:
+    return WorkItemSummary(
+        id=item.id,
+        project_id=item.project_id,
+        work_type=item.work_type,
+        title=item.title,
+        body=item.body,
+        status=item.status,
+        source=item.source,
+        occurred_at_utc=item.occurred_at_utc,
+    )
+
+
+def _research_summary(
+    job: repo.ResearchJob,
+    *,
+    project_name: str | None = None,
+    source_count: int = 0,
+) -> ResearchJobSummary:
+    return ResearchJobSummary(
+        id=job.id,
+        project_id=job.project_id,
+        project_name=project_name,
+        question=job.question,
+        status=job.status,
+        scope=job.scope,
+        provider=job.provider,
+        started_at_utc=job.started_at_utc,
+        completed_at_utc=job.completed_at_utc,
+        result_summary=job.result_summary,
+        source_count=source_count,
+        error=job.error_text,
+    )
+
+
 def _error_response(request: Request, status_code: int, error: str, message: str) -> JSONResponse:
     payload = DashboardError(
         error=error,
@@ -366,7 +419,10 @@ async def api_health(settings: Settings = Depends(get_settings)) -> DashboardHea
         dashboard_bound_host=settings.dashboard_bind_host,
         dashboard_bound_port=settings.dashboard_bind_port,
         ollama_configured=settings.ollama_model is not None,
-        research_configured=settings.research_provider is not None,
+        research_configured=(
+            settings.research_provider in {"tavily", "brave"}
+            and settings.research_api_key is not None
+        ),
         uptime_seconds=round(time.monotonic() - _STARTED_AT, 3),
     )
 
@@ -404,9 +460,21 @@ async def api_project_list(
             ProjectListItem(
                 id=project.id,
                 name=project.name,
+                description=project.description,
                 allowed_root=project.allowed_root,
                 status=_health_status(snapshot[0] if snapshot else None),
-                last_checked=snapshot[1] if snapshot else project.updated_at_utc,
+                last_checked=snapshot[1]
+                if snapshot
+                else (project.last_activity_utc or project.updated_at_utc),
+                catalog_status=project.catalog_status,
+                category=project.category,
+                priority=project.priority,
+                tech_stack=_tech_stack(project.tech_stack_json),
+                source=project.source,
+                monitored=bool(project.monitored),
+                last_activity_utc=project.last_activity_utc,
+                work_item_count=repo.count_work_items(conn, project.id),
+                repo_url=project.repo_url,
             )
         )
 
@@ -442,6 +510,8 @@ async def api_project_detail(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
     snapshot = repo.get_latest_health_snapshot(conn, project_id)
+    work_items = repo.list_work_items_for_project(conn, project_id, limit=5)
+    research_jobs = repo.list_research_jobs_for_project(conn, project_id)
     return ProjectDetail(
         id=project.id,
         name=project.name,
@@ -454,6 +524,26 @@ async def api_project_detail(
         evidence_count=len(repo.list_evidence_for_project(conn, project_id)),
         discord_mappings=len(repo.list_mappings_for_project(conn, project_id)),
         health_freshness=_health_freshness(snapshot[1]) if snapshot else "unknown",
+        catalog_status=project.catalog_status,
+        category=project.category,
+        priority=project.priority,
+        tech_stack=_tech_stack(project.tech_stack_json),
+        repo_url=project.repo_url,
+        local_path=project.local_path,
+        source=project.source,
+        monitored=bool(project.monitored),
+        last_activity_utc=project.last_activity_utc,
+        work_item_count=repo.count_work_items(conn, project_id),
+        research_count=len(research_jobs),
+        recent_work=[_work_item_summary(item) for item in work_items],
+        recent_research=[
+            _research_summary(
+                job,
+                project_name=project.name,
+                source_count=repo.count_research_sources(conn, job.id),
+            )
+            for job in research_jobs[:5]
+        ],
     )
 
 
@@ -582,6 +672,122 @@ async def api_evidence_detail(
         claim=evidence.claim,
         is_stale=bool(evidence.is_stale),
         relevance_score=_clamp_unit(evidence.relevance_score),
+    )
+
+
+# ---------------------------------------------------------------------------
+# --- Research ---
+# ---------------------------------------------------------------------------
+
+
+@app.get(
+    "/research",
+    response_model=list[ResearchJobSummary],
+    summary="List recent research jobs",
+    description="Return recent local/web research jobs, optionally scoped to one project.",
+    responses={401: {"model": DashboardError}, 403: {"model": DashboardError}},
+)
+async def api_research_list(
+    project_id: int | None = None,
+    pagination: PaginationParams = Depends(),
+    auth: AuthorizationChecker = Depends(get_auth_checker),
+) -> list[ResearchJobSummary]:
+    """List research jobs newest first."""
+    if project_id is not None:
+        auth.check_project_access(project_id)
+    else:
+        auth.check_user_guild_channel()
+
+    conn = get_conn()
+    if project_id is not None:
+        jobs = repo.list_research_jobs_for_project(conn, project_id)
+    else:
+        jobs = repo.list_recent_research_jobs(conn, limit=100)
+    names = {project.id: project.name for project in repo.list_projects(conn)}
+    start = (pagination.page - 1) * pagination.per_page
+    return [
+        _research_summary(
+            job,
+            project_name=names.get(job.project_id) if job.project_id is not None else None,
+            source_count=repo.count_research_sources(conn, job.id),
+        )
+        for job in jobs[start : start + pagination.per_page]
+    ]
+
+
+@app.get(
+    "/research/{job_id}",
+    response_model=ResearchJobDetail,
+    summary="Get a research report and its sources",
+    responses={
+        401: {"model": DashboardError},
+        403: {"model": DashboardError},
+        404: {"model": DashboardError},
+    },
+)
+async def api_research_detail(
+    job_id: int,
+    auth: AuthorizationChecker = Depends(get_auth_checker),
+) -> ResearchJobDetail:
+    """Return one persisted research report with citations."""
+    auth.check_user_guild_channel()
+    conn = get_conn()
+    job = repo.get_research_job(conn, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Research job not found")
+    if job.project_id is not None:
+        auth.check_project_access(job.project_id)
+
+    project = repo.get_project_by_id(conn, job.project_id) if job.project_id is not None else None
+    report = repo.get_research_report(conn, job_id)
+    sources = repo.list_research_sources(conn, job_id)
+    return ResearchJobDetail(
+        **_research_summary(
+            job,
+            project_name=project.name if project is not None else None,
+            source_count=len(sources),
+        ).model_dump(),
+        report_text=report.report_text if report is not None else None,
+        report_generated_at_utc=report.generated_at_utc if report is not None else None,
+        sources=[
+            ResearchSourceSummary(
+                id=source.id,
+                title=source.title,
+                url=source.canonical_url,
+                source_type=source.source_type,
+                snippet=source.snippet,
+                relevance_score=source.relevance_score,
+                source_ref=source.source_ref,
+                retrieved_at_utc=source.retrieved_at_utc,
+            )
+            for source in sources
+        ],
+    )
+
+
+@app.get(
+    "/catalog/summary",
+    response_model=CatalogSummary,
+    summary="Summarize the imported project catalog",
+    responses={401: {"model": DashboardError}, 403: {"model": DashboardError}},
+)
+async def api_catalog_summary(
+    auth: AuthorizationChecker = Depends(get_auth_checker),
+) -> CatalogSummary:
+    """Return counts for the dashboard home and catalog header."""
+    auth.check_user_guild_channel()
+    conn = get_conn()
+    projects = repo.list_projects(conn)
+    latest = repo.get_latest_catalog_import(conn)
+    return CatalogSummary(
+        project_count=len(projects),
+        monitored_count=sum(1 for project in projects if project.monitored),
+        catalog_count=sum(1 for project in projects if project.source == "catalog"),
+        active_count=sum(1 for project in projects if project.catalog_status == "active"),
+        work_item_count=repo.count_all_work_items(conn),
+        research_job_count=repo.count_research_jobs(conn),
+        categories=sorted({project.category for project in projects if project.category}),
+        last_import_at_utc=latest.imported_at_utc if latest is not None else None,
     )
 
 

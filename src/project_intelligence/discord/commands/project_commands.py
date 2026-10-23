@@ -1,19 +1,22 @@
 """Project mapping and command set (Phase 11).
 
 Implements /next, /roadmap, /blocker, /connect-project, /create-project, /note,
-and /health commands.  All commands pass through central authorization before
-retrieving project data.  Project mapping is explicit and validated; paths must
-remain within configured roots.
+/health, and /research commands.  All commands pass through central
+authorization before retrieving project data.  Project mapping is explicit and
+validated; paths must remain within configured roots.
 """
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from time import monotonic
 from typing import Any, cast
 
 from project_intelligence.config import Settings
 from project_intelligence.health.health_engine import check_and_store_health
+from project_intelligence.research.service import VALID_SCOPES, run_research
+from project_intelligence.research.web_research import ResearchError
 from project_intelligence.security import (
     AuthContext,
     AuthorizationError,
@@ -29,7 +32,7 @@ try:
     from discord import app_commands
 
     DISCORD_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover - discord.py is an optional dependency
     DISCORD_AVAILABLE = False
     discord = None  # type: ignore[assignment]
     app_commands = None  # type: ignore[assignment]
@@ -43,6 +46,7 @@ MAPPED_COMMANDS: tuple[str, ...] = (
     "connect-project",
     "note",
     "health",
+    "research",
 )
 
 
@@ -83,6 +87,32 @@ def _context(interaction: Any) -> tuple[AuthContext | None, Settings | None]:
 
 async def _reply(interaction: Any, message: str) -> None:
     await interaction.response.send_message(message, ephemeral=True)
+
+
+async def _defer(interaction: Any) -> None:
+    """Defer an interaction when the transport supports it (real Discord does)."""
+    defer = getattr(interaction.response, "defer", None)
+    if defer is not None:
+        await defer(ephemeral=True, thinking=True)
+    else:  # pragma: no cover - offline doubles may not implement defer
+        await interaction.response.send_message("Working…", ephemeral=True)
+
+
+async def _followup(interaction: Any, message: str) -> None:
+    followup = getattr(interaction, "followup", None)
+    if followup is not None:
+        await followup.send(message, ephemeral=True)
+    else:  # pragma: no cover - offline doubles may not implement followup
+        await interaction.response.send_message(message, ephemeral=True)
+
+
+def _channel_project_id(auth_ctx: AuthContext) -> int | None:
+    """Resolve the channel's project without requiring a command-specific map."""
+    return repo.get_any_mapped_project_id(
+        get_conn(),
+        auth_ctx.discord_guild_id,
+        auth_ctx.discord_channel_id,
+    )
 
 
 if DISCORD_AVAILABLE:
@@ -376,7 +406,118 @@ if DISCORD_AVAILABLE:
             f"Git dirty: `{git_dirty}`\nChecked: {snapshot['checked_at_utc']}",
         )
 
-else:
+    @app_commands.command(
+        name="research",
+        description="Research a question across local project knowledge and the web",
+    )
+    @app_commands.describe(
+        question="What to research (up to 1000 characters)",
+        scope="Where to look: local, web, or both",
+        project_id="Optional project ID; defaults to this channel's project",
+    )
+    @app_commands.choices(
+        scope=[
+            app_commands.Choice(name="Both local and web", value="both"),
+            app_commands.Choice(name="Local knowledge only", value="local"),
+            app_commands.Choice(name="Web only", value="web"),
+        ]
+    )
+    async def research_command(
+        interaction: discord.Interaction,
+        question: str,
+        scope: str = "both",
+        project_id: int | None = None,
+    ) -> None:
+        """Run a cited research job and save the full report in the dashboard."""
+        auth_ctx, settings = _context(interaction)
+        if auth_ctx is None or settings is None:
+            await _reply(interaction, "Authentication required.")
+            return
+        checker = make_checker(auth_ctx, settings)
+        try:
+            checker.check_user_guild_channel()
+        except AuthorizationError as exc:
+            await _reply(interaction, exc.message)
+            return
+
+        normalized_scope = scope.strip().lower()
+        if normalized_scope not in VALID_SCOPES:
+            await _reply(
+                interaction,
+                f"Scope must be one of: {', '.join(VALID_SCOPES)}.",
+            )
+            return
+        normalized_question = " ".join(question.split()).strip()
+        if not normalized_question:
+            await _reply(interaction, "Research question cannot be empty.")
+            return
+        if len(normalized_question) > 1000:
+            await _reply(interaction, "Research question must be 1000 characters or fewer.")
+            return
+
+        limited, reset = rate_limiter.check_research_per_user(auth_ctx.discord_user_id)
+        if limited:
+            wait_seconds = max(1, int(reset - monotonic()))
+            await _reply(
+                interaction,
+                f"Research is rate limited. Try again in {wait_seconds} seconds.",
+            )
+            return
+
+        conn = get_conn()
+        resolved_project = project_id
+        if resolved_project is None:
+            resolved_project = _channel_project_id(auth_ctx)
+        if resolved_project is not None:
+            if repo.get_project_by_id(conn, resolved_project) is None:
+                await _reply(interaction, f"Project {resolved_project} was not found.")
+                return
+            try:
+                checker.check_project_access(resolved_project)
+            except AuthorizationError as exc:
+                await _reply(interaction, exc.message)
+                return
+
+        await _defer(interaction)
+        try:
+            result = await asyncio.to_thread(
+                run_research,
+                normalized_question,
+                project_id=resolved_project,
+                user_id=auth_ctx.discord_user_id,
+                scope=normalized_scope,
+                settings=settings,
+            )
+        except ResearchError as exc:
+            await _followup(interaction, f"**Research failed**\n{exc}")
+            return
+        except ValueError as exc:
+            await _followup(interaction, f"**Research failed**\n{exc}")
+            return
+
+        if result.status != "completed":
+            await _followup(
+                interaction,
+                f"**Research failed**\n{result.error or 'The job did not complete.'}",
+            )
+            return
+
+        body = result.report
+        truncated = len(body) > 1500
+        if truncated:
+            body = body[:1500].rstrip() + "\n…"
+        message = (
+            f"**Research #{result.job_id}** · {result.local_count} local · "
+            f"{result.web_count} web\n\n{body}"
+        )
+        if truncated:
+            message += "\n\nFull report saved in the dashboard."
+        public_url = (settings.dashboard_public_url or "").rstrip("/")
+        if public_url:
+            message += f"\n{public_url}/#research-{result.job_id}"
+        await _followup(interaction, message)
+
+else:  # pragma: no cover - discord.py is an optional dependency
     next_command = None  # type: ignore[assignment]
     roadmap_command = None  # type: ignore[assignment]
     blocker_command = None  # type: ignore[assignment]
@@ -384,3 +525,4 @@ else:
     create_project_command = None  # type: ignore[assignment]
     note_command = None  # type: ignore[assignment]
     health_command = None  # type: ignore[assignment]
+    research_command = None  # type: ignore[assignment]

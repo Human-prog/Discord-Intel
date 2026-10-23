@@ -130,3 +130,11 @@ def test_lazy_package_export() -> None:
     assert package.app is dashboard.app
     with pytest.raises(AttributeError, match="no attribute"):
         package.__getattr__("not_a_real_attribute")
+
+
+def test_tech_stack_parses_only_lists_of_strings() -> None:
+    assert dashboard._tech_stack(None) == []
+    assert dashboard._tech_stack("") == []
+    assert dashboard._tech_stack("not-json") == []
+    assert dashboard._tech_stack('{"python": true}') == []
+    assert dashboard._tech_stack('["Python", "", "  ", "FastAPI"]') == ["Python", "FastAPI"]

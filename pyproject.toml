@@ -81,7 +81,7 @@ extend-immutable-calls = [
 "tests/**" = ["S101", "S104", "S105", "S106"]
 # SQL statements read better (and stay greppable) as single long lines; the
 # formatter cannot split string literals.
-"src/project_intelligence/storage/repositories.py" = ["E501"]
+"src/project_intelligence/storage/repositories.py" = ["E501", "S608"]
 "src/project_intelligence/storage/migrations/*.py" = ["E501"]
 "src/project_intelligence/jobs/scheduler.py" = ["E501"]
 

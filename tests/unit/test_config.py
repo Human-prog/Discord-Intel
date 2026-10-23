@@ -390,3 +390,35 @@ def test_env_example_file_is_valid_dev_config(make_settings):
     assert s.github_mode == "disabled"
     assert s.opencode_enabled is False
     assert s.scheduler_enabled is False
+
+
+# --------------------------------------------------------------------- #
+# research provider and dashboard public URL
+# --------------------------------------------------------------------- #
+
+
+def test_research_provider_is_normalized_and_validated(make_settings):
+    assert make_settings(research_provider=" TAVILY ").research_provider == "tavily"
+    assert make_settings(research_provider="brave").research_provider == "brave"
+    assert make_settings(research_provider="none").research_provider == "none"
+    assert make_settings(research_provider="").research_provider is None
+    assert make_settings(research_provider="   ").research_provider is None
+    with pytest.raises(ValidationError, match="RESEARCH_PROVIDER"):
+        make_settings(research_provider="google")
+
+
+def test_dashboard_public_url_is_normalized_and_validated(make_settings):
+    assert make_settings(dashboard_public_url=None).dashboard_public_url is None
+    assert make_settings(dashboard_public_url="").dashboard_public_url is None
+    assert (
+        make_settings(
+            dashboard_public_url="https://home3013.tail53635c.ts.net/"
+        ).dashboard_public_url
+        == "https://home3013.tail53635c.ts.net"
+    )
+    with pytest.raises(ValidationError, match="absolute HTTP"):
+        make_settings(dashboard_public_url="ftp://example.com")
+    with pytest.raises(ValidationError, match="absolute HTTP"):
+        make_settings(dashboard_public_url="https:///no-host")
+    with pytest.raises(ValidationError, match="credentials"):
+        make_settings(dashboard_public_url="https://user:pass@example.com")

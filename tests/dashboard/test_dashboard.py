@@ -353,3 +353,165 @@ def test_recent_activity_respects_page_size(client, db, app_settings) -> None:
     _login(client, app_settings)
 
     assert len(client.get("/activity/recent?per_page=2").json()) == 2
+
+
+# ---------------------------------------------------------------------------
+# Catalog and research
+# ---------------------------------------------------------------------------
+
+
+def _catalog_project(db, name: str = "Catalog Alpha"):
+    return repo.upsert_catalog_project(
+        db,
+        catalog_key="a" * 64,
+        name=name,
+        description="Catalog description",
+        local_path="C:\\Projects\\Alpha",
+        repo_url="https://example.com/alpha",
+        tech_stack_json='["Python", "FastAPI"]',
+        category="01 - High Priority Projects",
+        priority="high",
+        catalog_status="active",
+        last_activity_utc="2026-10-20T00:00:00Z",
+        metadata_json='{"relative_path": "Alpha"}',
+        monitored=False,
+    )
+
+
+def _research_job(db, project_id, question="How does research work?"):
+    job = repo.upsert_research_job(db, project_id, 1, question, scope="both", provider="tavily")
+    repo.upsert_research_source(
+        db,
+        job.id,
+        "Example source",
+        "https://example.com/source",
+        "web",
+        "b" * 64,
+        snippet="A source snippet",
+        relevance_score=0.75,
+        source_ref="https://example.com/source",
+    )
+    repo.upsert_research_report(db, job.id, "# Report\n\nBody", citation_count=1)
+    repo.complete_research_job(db, job.id, status="completed", result_summary="1 source")
+    db.commit()
+    return job
+
+
+def test_project_list_includes_catalog_metadata(client, db, app_settings) -> None:
+    project = _catalog_project(db)
+    repo.upsert_work_item(db, project.id, "commit", "A commit", source="git")
+    _login(client, app_settings)
+
+    body = client.get("/projects").json()[0]
+    assert body["description"] == "Catalog description"
+    assert body["catalog_status"] == "active"
+    assert body["category"] == "01 - High Priority Projects"
+    assert body["priority"] == "high"
+    assert body["tech_stack"] == ["Python", "FastAPI"]
+    assert body["source"] == "catalog"
+    assert body["monitored"] is False
+    assert body["last_activity_utc"] == "2026-10-20T00:00:00Z"
+    assert body["work_item_count"] == 1
+    assert body["repo_url"] == "https://example.com/alpha"
+
+
+def test_project_detail_includes_recent_work_and_research(client, db, app_settings) -> None:
+    project = _project(db)
+    repo.upsert_work_item(db, project.id, "commit", "A commit", body="Body", source="git")
+    job = _research_job(db, project.id)
+    _login(client, app_settings)
+
+    body = client.get(f"/projects/{project.id}").json()
+    assert body["work_item_count"] == 1
+    assert body["research_count"] == 1
+    assert body["recent_work"][0]["title"] == "A commit"
+    assert body["recent_work"][0]["body"] == "Body"
+    assert body["recent_research"][0]["id"] == job.id
+    assert body["recent_research"][0]["project_name"] == "Alpha"
+    assert body["recent_research"][0]["source_count"] == 1
+    assert body["recent_research"][0]["result_summary"] == "1 source"
+
+
+def test_research_list_scopes_pagination_and_detail(client, db, app_settings) -> None:
+    project = _project(db)
+    job = _research_job(db, project.id)
+    global_job = repo.upsert_research_job(db, None, None, "Global question", scope="local")
+    repo.upsert_research_report(db, global_job.id, "Global report", citation_count=0)
+    repo.complete_research_job(db, global_job.id, status="completed")
+    db.commit()
+    _login(client, app_settings)
+
+    all_jobs = client.get("/research").json()
+    assert {item["id"] for item in all_jobs} == {job.id, global_job.id}
+    scoped = client.get(f"/research?project_id={project.id}").json()
+    assert [item["id"] for item in scoped] == [job.id]
+    assert scoped[0]["project_name"] == "Alpha"
+    assert scoped[0]["source_count"] == 1
+    page = client.get("/research?per_page=1&page=2").json()
+    assert len(page) == 1
+
+    detail = client.get(f"/research/{job.id}").json()
+    assert detail["report_text"] == "# Report\n\nBody"
+    assert detail["report_generated_at_utc"].endswith("Z")
+    assert detail["source_count"] == 1
+    assert detail["sources"][0]["title"] == "Example source"
+    assert detail["sources"][0]["url"] == "https://example.com/source"
+    assert detail["sources"][0]["relevance_score"] == 0.75
+    assert detail["sources"][0]["source_ref"] == "https://example.com/source"
+
+    global_detail = client.get(f"/research/{global_job.id}").json()
+    assert global_detail["project_id"] is None
+    assert global_detail["project_name"] is None
+    assert global_detail["report_text"] == "Global report"
+
+
+def test_research_detail_missing_returns_404(client, app_settings) -> None:
+    _login(client, app_settings)
+    assert client.get("/research/9999").status_code == 404
+
+
+def test_catalog_summary(client, db, app_settings) -> None:
+    project = _catalog_project(db)
+    repo.upsert_work_item(db, project.id, "commit", "A commit")
+    job = repo.upsert_research_job(db, project.id, 1, "Question")
+    repo.record_catalog_import(
+        db,
+        source_name="catalog.json",
+        source_checksum="c" * 64,
+        project_count=1,
+        work_item_count=1,
+        metadata_json='{"root": "C:\\\\Projects"}',
+    )
+    db.commit()
+    _login(client, app_settings)
+
+    body = client.get("/catalog/summary").json()
+    assert body["project_count"] == 1
+    assert body["monitored_count"] == 0
+    assert body["catalog_count"] == 1
+    assert body["active_count"] == 1
+    assert body["work_item_count"] == 1
+    assert body["research_job_count"] == 1
+    assert body["categories"] == ["01 - High Priority Projects"]
+    assert body["last_import_at_utc"].endswith("Z")
+    assert job.id
+
+
+def test_catalog_and_research_endpoints_require_auth(client) -> None:
+    for path in ("/research", "/research/1", "/catalog/summary"):
+        assert client.get(path).status_code == 401, path
+
+
+def test_health_reports_research_configuration(client, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARCH_PROVIDER", "tavily")
+    monkeypatch.setenv("RESEARCH_API_KEY", "test-key")
+    body = client.get("/health").json()
+    assert body["research_configured"] is True
+
+
+def test_catalog_summary_without_import(client, app_settings) -> None:
+    _login(client, app_settings)
+    body = client.get("/catalog/summary").json()
+    assert body["project_count"] == 0
+    assert body["last_import_at_utc"] is None
+    assert body["categories"] == []

@@ -89,7 +89,12 @@
   .pill-unhealthy { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); border-color: color-mix(in srgb, var(--bad) 30%, transparent); }
   .pill-unknown, .pill-open { color: var(--unknown); background: color-mix(in srgb, var(--unknown) 12%, transparent); border-color: color-mix(in srgb, var(--unknown) 30%, transparent); }
   .pill-in_progress { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
-  .pill-completed { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+  .pill-completed, .pill-active { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+  .pill-idle, .pill-pending { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+  .pill-dormant, .pill-failed { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); border-color: color-mix(in srgb, var(--bad) 30%, transparent); }
+  .pill-high { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); border-color: color-mix(in srgb, var(--bad) 30%, transparent); }
+  .pill-medium { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+  .pill-low, .pill-agent, .pill-idea { color: var(--muted); background: var(--surface-2); border-color: var(--border); }
   .project {
     display: block; width: 100%; text-align: left;
     background: var(--surface); color: var(--text);
@@ -152,11 +157,27 @@
   .list-item .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
   .hash { overflow-wrap: anywhere; }
   .header-actions { display: flex; gap: 8px; }
+  .tabs { display: flex; gap: 8px; margin: -6px 0 16px; }
+  .tab {
+    flex: 1; min-height: 42px; border-radius: 12px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+    font: inherit; font-weight: 600; cursor: pointer;
+  }
+  .tab.active { background: var(--surface-2); color: var(--text); border-color: var(--accent); }
   .icon-btn {
     width: 42px; height: 42px; display: grid; place-items: center;
     border-radius: 12px; border: 1px solid var(--border);
     background: var(--surface); color: var(--text); cursor: pointer; font-size: 16px;
   }
+  .report {
+    white-space: pre-wrap; overflow-wrap: anywhere;
+    font-size: 14px; line-height: 1.55;
+  }
+  .source { padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .source:last-child { border-bottom: 0; padding-bottom: 0; }
+  .source a { color: var(--accent); overflow-wrap: anywhere; }
+  .source .snippet { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .project-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .loading { color: var(--muted); padding: 24px 4px; }
   .footer { color: var(--muted); font-size: 11px; text-align: center; margin-top: 22px; }
   @media (min-width: 560px) {
@@ -173,7 +194,7 @@
   "use strict";
 
   const app = document.getElementById("app");
-  const state = { projectId: null, health: null };
+  const state = { projectId: null, health: null, view: "projects", researchId: null };
 
   // ---------- tiny DOM helpers ----------
   function el(tag, props, ...children) {
@@ -276,6 +297,36 @@
     return el("span", { class: `pill pill-${safe}` }, safe.replace("_", " "));
   }
 
+  function catalogPill(status) {
+    if (!status) return "";
+    const safe = ["active", "idle", "dormant", "archived"].includes(status) ? status : "unknown";
+    return el("span", { class: `pill pill-${safe}` }, status);
+  }
+
+  function priorityPill(priority) {
+    if (!priority) return "";
+    const safe = ["high", "medium", "low", "agent", "idea"].includes(priority) ? priority : "unknown";
+    return el("span", { class: `pill pill-${safe}` }, priority);
+  }
+
+  function researchPill(status) {
+    const safe = ["completed", "failed", "pending", "running"].includes(status) ? status : "unknown";
+    return el("span", { class: `pill pill-${safe}` }, status);
+  }
+
+  function safeUrl(value) {
+    try {
+      const url = new URL(value);
+      return ["http:", "https:"].includes(url.protocol) ? url.href : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function techChips(items) {
+    return (items || []).map((tech) => el("span", { class: "chip" }, tech));
+  }
+
   // ---------- chrome ----------
   function brand() {
     return el("header", { class: "brand" },
@@ -287,12 +338,31 @@
     );
   }
 
+  function navTabs() {
+    return el("nav", { class: "tabs", "aria-label": "Sections" },
+      el("button", {
+        class: state.view === "projects" ? "tab active" : "tab", type: "button",
+        onclick: () => { if (state.view !== "projects") showHome(); },
+      }, "Projects"),
+      el("button", {
+        class: state.view === "research" ? "tab active" : "tab", type: "button",
+        onclick: () => { if (state.view !== "research") showResearchList(); },
+      }, "Research")
+    );
+  }
+
   function headerActions(showRefresh = true) {
     const actions = el("div", { class: "header-actions" });
     if (showRefresh) {
       actions.append(el("button", {
         class: "icon-btn", type: "button", title: "Refresh", "aria-label": "Refresh",
-        onclick: () => { state.projectId ? showProject(state.projectId) : showHome(); },
+        onclick: () => {
+          if (state.view === "research") {
+            state.researchId ? showResearchDetail(state.researchId) : showResearchList();
+          } else {
+            state.projectId ? showProject(state.projectId) : showHome();
+          }
+        },
       }, "↻"));
     }
     actions.append(el("button", {
@@ -305,6 +375,7 @@
   async function logout() {
     try { await api("/auth/logout", { method: "POST" }); } catch (_) { /* cookie cleared best-effort */ }
     state.projectId = null;
+    state.researchId = null;
     showLogin();
   }
 
@@ -333,7 +404,7 @@
             body: JSON.stringify({ token: input.value.trim() }),
           });
           input.value = "";
-          showHome();
+          routeFromHash();
         } catch (error) {
           errorBox.replaceChildren(banner(error.unauthorized ? "That token was not accepted." : error.message));
           submit.disabled = false;
@@ -368,20 +439,25 @@
   async function showHome() {
     loading();
     state.projectId = null;
+    state.researchId = null;
+    state.view = "projects";
+    history.replaceState(null, "", location.pathname);
     try {
-      const [health, projects, activity] = await Promise.all([
+      const [health, projects, activity, catalog, research] = await Promise.all([
         api("/health"),
-        api("/projects"),
-        api("/activity/recent?per_page=10"),
+        api("/projects?per_page=100"),
+        api("/activity/recent?per_page=6"),
+        api("/catalog/summary"),
+        api("/research?per_page=5"),
       ]);
       state.health = health;
-      renderHome(health, projects, activity);
+      renderHome(health, projects, activity, catalog, research);
     } catch (error) {
       handleError(error, showHome);
     }
   }
 
-  function renderHome(health, projects, activity) {
+  function renderHome(health, projects, activity, catalog, research) {
     clear();
     const dbOk = health.database_healthy !== false;
 
@@ -391,7 +467,8 @@
         el("div", { class: "stack" },
           el("div", { class: "row", style: "justify-content:flex-start;gap:8px" },
             el("span", { class: `pill ${dbOk ? "pill-healthy" : "pill-unhealthy"}` }, dbOk ? "database ok" : "database error"),
-            el("span", { class: "chip" }, health.app_env || "unknown")
+            el("span", { class: "chip" }, health.app_env || "unknown"),
+            el("span", { class: `chip` }, health.research_configured ? "web research ready" : "local research only")
           ),
           el("div", { class: "small muted" },
             `up ${fmtUptime(health.uptime_seconds)} · ${health.dashboard_bound_host}:${health.dashboard_bound_port}`
@@ -401,12 +478,27 @@
       )
     );
 
+    const catalogCard = el("section", { class: "card" },
+      el("h2", null, "Catalog"),
+      el("div", { class: "meta", style: "margin-top:0" },
+        el("span", { class: "chip" }, `${catalog.project_count} projects`),
+        el("span", { class: "chip" }, `${catalog.active_count} active`),
+        el("span", { class: "chip" }, `${catalog.work_item_count} work items`),
+        el("span", { class: "chip" }, `${catalog.research_job_count} research jobs`)
+      ),
+      el("div", { class: "small muted", style: "margin-top:10px" },
+        catalog.last_import_at_utc
+          ? `Catalog imported ${timeAgo(catalog.last_import_at_utc)} · ${catalog.monitored_count} monitored`
+          : "No workstation catalog imported yet."
+      )
+    );
+
     const projectList = el("section", { class: "stack" });
     if (!projects.length) {
       projectList.append(el("section", { class: "card" },
         el("h2", null, "Projects"),
         el("p", { class: "empty", style: "margin:0" },
-          "No projects are registered yet. Connect one through the Discord bot and refresh.")
+          "No projects are registered yet. Import the workstation catalog or connect one through Discord.")
       ));
     } else {
       for (const project of projects) {
@@ -421,11 +513,39 @@
             ),
             statusPill(project.status)
           ),
-          el("div", { class: "small muted", style: "margin-top:8px" },
-            `checked ${timeAgo(project.last_checked)}`)
+          el("div", { class: "project-meta" },
+            catalogPill(project.catalog_status),
+            priorityPill(project.priority),
+            project.monitored === false ? el("span", { class: "chip" }, "catalog only") : "",
+            el("span", { class: "chip" }, `${project.work_item_count || 0} work`),
+            project.last_activity_utc ? el("span", { class: "chip" }, `active ${timeAgo(project.last_activity_utc)}`) : ""
+          )
         ));
       }
     }
+
+    const researchCard = el("section", { class: "card" },
+      el("div", { class: "row" },
+        el("h2", { style: "margin:0" }, "Recent research"),
+        el("button", { class: "btn btn-ghost", type: "button", style: "min-height:34px;padding:0 10px", onclick: showResearchList }, "View all")
+      ),
+      research.length
+        ? el("div", { style: "margin-top:12px" }, research.map((job) =>
+            el("button", {
+              class: "project", type: "button", style: "margin-bottom:8px",
+              onclick: () => showResearchDetail(job.id),
+            },
+              el("div", { class: "row" },
+                el("div", { style: "min-width:0;text-align:left" },
+                  el("div", { class: "name", style: "font-size:14px" }, job.question),
+                  el("div", { class: "root" }, `${job.scope} · ${job.source_count} sources · ${timeAgo(job.started_at_utc)}`)
+                ),
+                researchPill(job.status)
+              )
+            )
+          ))
+        : el("p", { class: "empty", style: "margin:12px 0 0" }, "No research yet. Use /research in Discord.")
+    );
 
     const activityCard = el("section", { class: "card" },
       el("h2", null, "Recent activity"),
@@ -439,14 +559,148 @@
         : el("p", { class: "empty", style: "margin:0" }, "No activity yet.")
     );
 
-    app.append(brand(), healthCard, projectList, activityCard,
+    app.append(brand(), navTabs(), healthCard, catalogCard, projectList, researchCard, activityCard,
       el("p", { class: "footer" }, "All data is read-only except milestone writes from Discord."));
+  }
+
+  // ---------- research list ----------
+  async function showResearchList() {
+    loading();
+    state.view = "research";
+    state.projectId = null;
+    state.researchId = null;
+    history.replaceState(null, "", location.pathname);
+    try {
+      const [catalog, jobs] = await Promise.all([
+        api("/catalog/summary"),
+        api("/research?per_page=100"),
+      ]);
+      renderResearchList(catalog, jobs);
+    } catch (error) {
+      handleError(error, showResearchList);
+    }
+  }
+
+  function renderResearchList(catalog, jobs) {
+    clear();
+    const list = jobs.length
+      ? el("div", null, jobs.map((job) =>
+          el("button", {
+            class: "project", type: "button",
+            onclick: () => showResearchDetail(job.id),
+          },
+            el("div", { class: "row" },
+              el("div", { style: "min-width:0;text-align:left" },
+                el("div", { class: "name" }, job.question),
+                el("div", { class: "root" },
+                  `${job.project_name || "workspace"} · ${job.scope} · ${timeAgo(job.started_at_utc)}`)
+              ),
+              researchPill(job.status)
+            ),
+            el("div", { class: "project-meta" },
+              el("span", { class: "chip" }, `${job.source_count} sources`),
+              job.provider ? el("span", { class: "chip" }, job.provider) : "",
+              job.result_summary ? el("span", { class: "chip" }, job.result_summary) : ""
+            )
+          )
+        ))
+      : el("section", { class: "card" },
+          el("p", { class: "empty", style: "margin:0" },
+            "No research jobs yet. Ask in Discord with /research, then refresh."));
+
+    app.append(
+      brand(),
+      navTabs(),
+      el("section", { class: "card" },
+        el("h2", null, "Research"),
+        el("p", { class: "small muted", style: "margin:0" },
+          `${catalog.research_job_count} jobs · local knowledge and cited web sources. ` +
+          (catalog.research_job_count ? "Tap a job to read the full report." : "")
+        )
+      ),
+      list,
+      el("p", { class: "footer" }, "Research reports are private to this dashboard.")
+    );
+  }
+
+  // ---------- research detail ----------
+  async function showResearchDetail(jobId) {
+    loading();
+    state.view = "research";
+    state.researchId = jobId;
+    state.projectId = null;
+    history.replaceState(null, "", `#research-${jobId}`);
+    try {
+      const job = await api(`/research/${jobId}`);
+      renderResearchDetail(job);
+    } catch (error) {
+      handleError(error, () => showResearchDetail(jobId));
+    }
+  }
+
+  function renderResearchDetail(job) {
+    clear();
+    const back = el("button", { class: "back", type: "button", onclick: showResearchList }, "← All research");
+    const sourceList = job.sources && job.sources.length
+      ? el("div", null, job.sources.map((source) => {
+          const href = source.url ? safeUrl(source.url) : null;
+          return el("div", { class: "source" },
+            el("div", { class: "title" },
+              el("span", null, source.title),
+              source.relevance_score ? el("span", { class: "chip" }, `score ${Number(source.relevance_score).toFixed(2)}`) : ""
+            ),
+            href ? el("a", { href, target: "_blank", rel: "noopener noreferrer" }, source.url) : "",
+            source.snippet ? el("div", { class: "snippet" }, source.snippet) : "",
+            el("div", { class: "sub mono" }, `${source.source_type}${source.source_ref ? ` · ${source.source_ref}` : ""}`)
+          );
+        }))
+      : el("p", { class: "empty", style: "margin:0" }, "No sources were stored for this job.");
+
+    app.append(
+      brand(),
+      navTabs(),
+      back,
+      el("section", { class: "card" },
+        el("div", { class: "row" },
+          el("div", { style: "min-width:0" },
+            el("h2", { style: "margin-bottom:4px" }, "Research"),
+            el("div", { class: "detail-title", style: "font-size:19px" }, job.question)
+          ),
+          researchPill(job.status)
+        ),
+        el("div", { class: "meta" },
+          el("span", { class: "chip" }, job.project_name || "workspace"),
+          el("span", { class: "chip" }, job.scope),
+          el("span", { class: "chip" }, `${job.source_count} sources`),
+          job.provider ? el("span", { class: "chip" }, job.provider) : "",
+          el("span", { class: "chip" }, timeAgo(job.started_at_utc))
+        ),
+        job.error ? banner(job.error) : ""
+      ),
+      el("section", { class: "card" },
+        el("h2", null, "Report"),
+        job.report_text
+          ? el("div", { class: "report" }, job.report_text)
+          : el("p", { class: "empty", style: "margin:0" },
+              job.status === "failed" ? "This job failed before producing a report." : "No report stored yet.")
+      ),
+      el("section", { class: "card" },
+        el("h2", null, "Sources"),
+        sourceList
+      ),
+      el("p", { class: "footer" },
+        `started ${fmtDate(job.started_at_utc)}` +
+        (job.completed_at_utc ? ` · completed ${timeAgo(job.completed_at_utc)}` : ""))
+    );
   }
 
   // ---------- project detail ----------
   async function showProject(projectId) {
     loading();
     state.projectId = projectId;
+    state.view = "projects";
+    state.researchId = null;
+    history.replaceState(null, "", `#project-${projectId}`);
     try {
       const [project, milestones, evidence] = await Promise.all([
         api(`/projects/${projectId}`),
@@ -463,6 +717,7 @@
     clear();
 
     const back = el("button", { class: "back", type: "button", onclick: showHome }, "← All projects");
+    const repoHref = project.repo_url ? safeUrl(project.repo_url) : null;
 
     const detail = el("section", { class: "card" },
       el("div", { class: "row" },
@@ -474,12 +729,63 @@
       ),
       project.description ? el("p", { class: "small muted", style: "margin:6px 0 0" }, project.description) : "",
       el("div", { class: "meta" },
+        catalogPill(project.catalog_status),
+        priorityPill(project.priority),
+        project.monitored === false ? el("span", { class: "chip" }, "catalog only") : "",
         el("span", { class: "chip" }, `${project.milestone_count} milestones`),
         el("span", { class: "chip" }, `${project.evidence_count} evidence`),
+        el("span", { class: "chip" }, `${project.work_item_count} work items`),
+        el("span", { class: "chip" }, `${project.research_count} research`),
         el("span", { class: "chip" }, `${project.discord_mappings} mappings`),
         el("span", { class: "chip" }, `health ${project.health_freshness}`)
       ),
-      el("p", { class: "mono muted", style: "margin:12px 0 0" }, project.allowed_root)
+      el("div", { class: "meta" }, techChips(project.tech_stack)),
+      repoHref ? el("p", { class: "small", style: "margin:10px 0 0" },
+        el("a", { href: repoHref, target: "_blank", rel: "noopener noreferrer" }, project.repo_url)) : "",
+      el("p", { class: "mono muted", style: "margin:12px 0 0" }, project.allowed_root),
+      project.local_path && project.local_path !== project.allowed_root
+        ? el("p", { class: "mono muted", style: "margin:4px 0 0" }, project.local_path) : "",
+      project.monitored === false
+        ? el("p", { class: "small muted", style: "margin:10px 0 0" },
+            "Catalog-only: this project lives on the workstation, so server-side health checks are skipped.")
+        : ""
+    );
+
+    const workCard = el("section", { class: "card" },
+      el("h2", null, "Recent work"),
+      project.recent_work && project.recent_work.length
+        ? el("div", null, project.recent_work.map((item) =>
+            el("div", { class: "list-item" },
+              el("div", { class: "title" },
+                el("span", null, item.title),
+                el("span", { class: "chip" }, item.status)
+              ),
+              el("div", { class: "sub" },
+                `${item.work_type} · ${item.source} · ${timeAgo(item.occurred_at_utc)}`)
+            )
+          ))
+        : el("p", { class: "empty", style: "margin:0" }, "No work items recorded yet.")
+    );
+
+    const researchCard = el("section", { class: "card" },
+      el("h2", null, "Research"),
+      project.recent_research && project.recent_research.length
+        ? el("div", null, project.recent_research.map((job) =>
+            el("button", {
+              class: "project", type: "button", style: "margin-bottom:8px",
+              onclick: () => showResearchDetail(job.id),
+            },
+              el("div", { class: "row" },
+                el("div", { style: "min-width:0;text-align:left" },
+                  el("div", { class: "name", style: "font-size:14px" }, job.question),
+                  el("div", { class: "root" }, `${job.source_count} sources · ${timeAgo(job.started_at_utc)}`)
+                ),
+                researchPill(job.status)
+              )
+            )
+          ))
+        : el("p", { class: "empty", style: "margin:0" },
+            "No research yet. Use /research in this project's Discord channel.")
     );
 
     const milestoneCard = el("section", { class: "card" },
@@ -516,7 +822,7 @@
         : el("p", { class: "empty", style: "margin:0" }, "No evidence records yet.")
     );
 
-    app.append(brand(), back, detail, milestoneCard, evidenceCard,
+    app.append(brand(), navTabs(), back, detail, workCard, researchCard, milestoneCard, evidenceCard,
       el("p", { class: "footer" }, `created ${fmtDate(project.created_at_utc)} · updated ${timeAgo(project.updated_at_utc)}`));
   }
 
@@ -535,16 +841,31 @@
   }
 
   // ---------- boot ----------
+  function routeFromHash() {
+    const researchMatch = /^#research-(\d+)$/.exec(location.hash);
+    if (researchMatch) {
+      showResearchDetail(Number(researchMatch[1]));
+      return;
+    }
+    const projectMatch = /^#project-(\d+)$/.exec(location.hash);
+    if (projectMatch) {
+      showProject(Number(projectMatch[1]));
+      return;
+    }
+    showHome();
+  }
+
   async function boot() {
     try {
       const session = await api("/auth/session");
-      if (session.authenticated) showHome();
+      if (session.authenticated) routeFromHash();
       else showLogin();
     } catch (_) {
       showLogin();
     }
   }
 
+  window.addEventListener("hashchange", routeFromHash);
   boot();
 })();
 </script>

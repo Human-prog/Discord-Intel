@@ -32,6 +32,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 APP_ENVS = ("development", "testing", "production")
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 GITHUB_MODES = ("disabled", "app", "token")
+RESEARCH_PROVIDERS = ("tavily", "brave", "none")
 
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
@@ -137,6 +138,7 @@ class Settings(BaseSettings):
     dashboard_bind_host: str = "127.0.0.1"
     dashboard_bind_port: int = Field(default=8765, ge=1, le=65535)
     dashboard_session_secret_file: Path | None = None
+    dashboard_public_url: str | None = None
 
     # --- projects ---
     project_allowed_roots: list[Path] = Field(default_factory=list)
@@ -184,6 +186,18 @@ class Settings(BaseSettings):
         value = str(v).strip().lower()
         if value not in GITHUB_MODES:
             raise ValueError(f"GITHUB_MODE must be one of: {', '.join(GITHUB_MODES)}")
+        return value
+
+    @field_validator("research_provider", mode="before")
+    @classmethod
+    def _check_research_provider(cls, v: Any) -> str | None:
+        if v is None:
+            return None
+        value = str(v).strip().lower()
+        if not value:
+            return None
+        if value not in RESEARCH_PROVIDERS:
+            raise ValueError(f"RESEARCH_PROVIDER must be one of: {', '.join(RESEARCH_PROVIDERS)}")
         return value
 
     @field_validator("data_dir", mode="before")
@@ -309,6 +323,21 @@ class Settings(BaseSettings):
                 "Tailscale Serve with application authentication"
             )
         return host
+
+    @field_validator("dashboard_public_url", mode="before")
+    @classmethod
+    def _check_dashboard_public_url(cls, v: Any) -> str | None:
+        if v is None:
+            return None
+        value = str(v).strip().rstrip("/")
+        if not value:
+            return None
+        parts = urlsplit(value)
+        if parts.scheme not in ("https", "http") or not parts.hostname:
+            raise ValueError("DASHBOARD_PUBLIC_URL must be an absolute HTTP(S) URL")
+        if parts.username or parts.password:
+            raise ValueError("DASHBOARD_PUBLIC_URL must not contain credentials")
+        return value
 
     # ------------------------------------------------------------------ #
     # cross-field validation

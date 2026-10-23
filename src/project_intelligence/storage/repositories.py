@@ -28,8 +28,33 @@ def _utc_now() -> str:
 # =========================================================================
 
 
+_PROJECT_COLUMNS = (
+    "id, name, description, allowed_root, created_at_utc, updated_at_utc, "
+    "catalog_key, catalog_status, category, priority, tech_stack_json, repo_url, "
+    "local_path, last_activity_utc, source, monitored, metadata_json"
+)
+
+
 class Project:
-    __slots__ = ("allowed_root", "created_at_utc", "description", "id", "name", "updated_at_utc")
+    __slots__ = (
+        "allowed_root",
+        "catalog_key",
+        "catalog_status",
+        "category",
+        "created_at_utc",
+        "description",
+        "id",
+        "last_activity_utc",
+        "local_path",
+        "metadata_json",
+        "monitored",
+        "name",
+        "priority",
+        "repo_url",
+        "source",
+        "tech_stack_json",
+        "updated_at_utc",
+    )
 
     def __init__(
         self,
@@ -39,6 +64,18 @@ class Project:
         allowed_root: str,
         created_at_utc: str,
         updated_at_utc: str,
+        *,
+        catalog_key: str | None = None,
+        catalog_status: str = "unknown",
+        category: str | None = None,
+        priority: str | None = None,
+        tech_stack_json: str | None = None,
+        repo_url: str | None = None,
+        local_path: str | None = None,
+        last_activity_utc: str | None = None,
+        source: str = "manual",
+        monitored: int = 1,
+        metadata_json: str | None = None,
     ) -> None:
         self.id = id
         self.name = name
@@ -46,67 +83,220 @@ class Project:
         self.allowed_root = allowed_root
         self.created_at_utc = created_at_utc
         self.updated_at_utc = updated_at_utc
+        self.catalog_key = catalog_key
+        self.catalog_status = catalog_status
+        self.category = category
+        self.priority = priority
+        self.tech_stack_json = tech_stack_json
+        self.repo_url = repo_url
+        self.local_path = local_path
+        self.last_activity_utc = last_activity_utc
+        self.source = source
+        self.monitored = monitored
+        self.metadata_json = metadata_json
+
+
+def _project_from_row(row: sqlite3.Row | tuple[object, ...]) -> Project:
+    return Project(
+        id=int(row[0]),  # type: ignore[arg-type]
+        name=str(row[1]),
+        description=row[2] if row[2] is None else str(row[2]),
+        allowed_root=str(row[3]),
+        created_at_utc=str(row[4]),
+        updated_at_utc=str(row[5]),
+        catalog_key=row[6] if row[6] is None else str(row[6]),
+        catalog_status=str(row[7]),
+        category=row[8] if row[8] is None else str(row[8]),
+        priority=row[9] if row[9] is None else str(row[9]),
+        tech_stack_json=row[10] if row[10] is None else str(row[10]),
+        repo_url=row[11] if row[11] is None else str(row[11]),
+        local_path=row[12] if row[12] is None else str(row[12]),
+        last_activity_utc=row[13] if row[13] is None else str(row[13]),
+        source=str(row[14]),
+        monitored=int(row[15]),  # type: ignore[arg-type]
+        metadata_json=row[16] if row[16] is None else str(row[16]),
+    )
 
 
 def upsert_project(
     conn: sqlite3.Connection, name: str, description: str | None, allowed_root: str
 ) -> Project:
     row = conn.execute(
-        """
+        f"""
         INSERT INTO projects (name, description, allowed_root, created_at_utc, updated_at_utc)
         VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(name, allowed_root) DO UPDATE
         SET description = excluded.description,
             updated_at_utc = excluded.updated_at_utc
-        RETURNING id, name, description, allowed_root, created_at_utc, updated_at_utc
+        RETURNING {_PROJECT_COLUMNS}
         """,
         (name, description, allowed_root, _utc_now(), _utc_now()),
     ).fetchone()
     if row is None:
         raise ValueError("Project upsert returned no row")
-    return Project(
-        id=row[0],
-        name=row[1],
-        description=row[2],
-        allowed_root=row[3],
-        created_at_utc=row[4],
-        updated_at_utc=row[5],
-    )
+    return _project_from_row(row)
+
+
+def _update_catalog_project(
+    conn: sqlite3.Connection,
+    project_id: int,
+    *,
+    catalog_key: str,
+    name: str,
+    description: str | None,
+    local_path: str,
+    repo_url: str | None,
+    tech_stack_json: str | None,
+    category: str | None,
+    priority: str | None,
+    catalog_status: str,
+    last_activity_utc: str | None,
+    metadata_json: str | None,
+    source: str,
+    monitored: int,
+) -> Project:
+    row = conn.execute(
+        f"""
+        UPDATE projects
+        SET name = ?, description = ?, allowed_root = ?, updated_at_utc = ?,
+            catalog_key = ?, catalog_status = ?, category = ?, priority = ?,
+            tech_stack_json = ?, repo_url = ?, local_path = ?, last_activity_utc = ?,
+            source = ?, monitored = ?, metadata_json = ?
+        WHERE id = ?
+        RETURNING {_PROJECT_COLUMNS}
+        """,
+        (
+            name,
+            description,
+            local_path,
+            _utc_now(),
+            catalog_key,
+            catalog_status,
+            category,
+            priority,
+            tech_stack_json,
+            repo_url,
+            local_path,
+            last_activity_utc,
+            source,
+            monitored,
+            metadata_json,
+            project_id,
+        ),
+    ).fetchone()
+    if row is None:
+        raise ValueError("Project update returned no row")
+    return _project_from_row(row)
+
+
+def upsert_catalog_project(
+    conn: sqlite3.Connection,
+    *,
+    catalog_key: str,
+    name: str,
+    description: str | None,
+    local_path: str,
+    repo_url: str | None = None,
+    tech_stack_json: str | None = None,
+    category: str | None = None,
+    priority: str | None = None,
+    catalog_status: str = "unknown",
+    last_activity_utc: str | None = None,
+    metadata_json: str | None = None,
+    source: str = "catalog",
+    monitored: int = 0,
+) -> Project:
+    """Insert or update a project discovered by the workstation catalog scan.
+
+    The lookup prefers the stable ``catalog_key`` (a hash of the resolved
+    source path) and falls back to the source path so a re-scan after a rename
+    updates the existing row instead of creating a duplicate.
+    """
+    row = conn.execute(
+        "SELECT id FROM projects WHERE catalog_key = ? OR allowed_root = ? LIMIT 1",
+        (catalog_key, local_path),
+    ).fetchone()
+    if row is not None:
+        return _update_catalog_project(
+            conn,
+            int(row[0]),
+            catalog_key=catalog_key,
+            name=name,
+            description=description,
+            local_path=local_path,
+            repo_url=repo_url,
+            tech_stack_json=tech_stack_json,
+            category=category,
+            priority=priority,
+            catalog_status=catalog_status,
+            last_activity_utc=last_activity_utc,
+            metadata_json=metadata_json,
+            source=source,
+            monitored=monitored,
+        )
+
+    row = conn.execute(
+        f"""
+        INSERT INTO projects (
+            name, description, allowed_root, created_at_utc, updated_at_utc,
+            catalog_key, catalog_status, category, priority, tech_stack_json,
+            repo_url, local_path, last_activity_utc, source, monitored, metadata_json
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        RETURNING {_PROJECT_COLUMNS}
+        """,
+        (
+            name,
+            description,
+            local_path,
+            _utc_now(),
+            _utc_now(),
+            catalog_key,
+            catalog_status,
+            category,
+            priority,
+            tech_stack_json,
+            repo_url,
+            local_path,
+            last_activity_utc,
+            source,
+            monitored,
+            metadata_json,
+        ),
+    ).fetchone()
+    if row is None:
+        raise ValueError("Catalog project upsert returned no row")
+    return _project_from_row(row)
 
 
 def get_project_by_root(conn: sqlite3.Connection, allowed_root: str) -> Project | None:
     row = conn.execute(
-        "SELECT id, name, description, allowed_root, created_at_utc, updated_at_utc FROM projects WHERE allowed_root = ?",
+        f"SELECT {_PROJECT_COLUMNS} FROM projects WHERE allowed_root = ?",
         (allowed_root,),
     ).fetchone()
     if row is None:
         return None
-    return Project(
-        id=row[0],
-        name=row[1],
-        description=row[2],
-        allowed_root=row[3],
-        created_at_utc=row[4],
-        updated_at_utc=row[5],
-    )
+    return _project_from_row(row)
+
+
+def get_project_by_catalog_key(conn: sqlite3.Connection, catalog_key: str) -> Project | None:
+    row = conn.execute(
+        f"SELECT {_PROJECT_COLUMNS} FROM projects WHERE catalog_key = ?",
+        (catalog_key,),
+    ).fetchone()
+    if row is None:
+        return None
+    return _project_from_row(row)
 
 
 def get_project_by_id(conn: sqlite3.Connection, project_id: int) -> Project | None:
     row = conn.execute(
-        "SELECT id, name, description, allowed_root, created_at_utc, updated_at_utc "
-        "FROM projects WHERE id = ?",
+        f"SELECT {_PROJECT_COLUMNS} FROM projects WHERE id = ?",
         (project_id,),
     ).fetchone()
     if row is None:
         return None
-    return Project(
-        id=row[0],
-        name=row[1],
-        description=row[2],
-        allowed_root=row[3],
-        created_at_utc=row[4],
-        updated_at_utc=row[5],
-    )
+    return _project_from_row(row)
 
 
 def get_latest_health_snapshot(conn: sqlite3.Connection, project_id: int) -> tuple[str, str] | None:
@@ -122,20 +312,8 @@ def get_latest_health_snapshot(conn: sqlite3.Connection, project_id: int) -> tup
 
 
 def list_projects(conn: sqlite3.Connection) -> list[Project]:
-    rows = conn.execute(
-        "SELECT id, name, description, allowed_root, created_at_utc, updated_at_utc FROM projects ORDER BY name"
-    ).fetchall()
-    return [
-        Project(
-            id=r[0],
-            name=r[1],
-            description=r[2],
-            allowed_root=r[3],
-            created_at_utc=r[4],
-            updated_at_utc=r[5],
-        )
-        for r in rows
-    ]
+    rows = conn.execute(f"SELECT {_PROJECT_COLUMNS} FROM projects ORDER BY name").fetchall()
+    return [_project_from_row(r) for r in rows]
 
 
 # =========================================================================
@@ -315,6 +493,22 @@ def get_mapped_project_id(
         "SELECT project_id FROM discord_mappings "
         "WHERE guild_id = ? AND channel_id = ? AND command_name = ?",
         (guild_id, channel_id, command_name),
+    ).fetchone()
+    return int(row[0]) if row is not None else None
+
+
+def get_any_mapped_project_id(
+    conn: sqlite3.Connection, guild_id: int, channel_id: int
+) -> int | None:
+    """Resolve any project mapped to this guild/channel.
+
+    Used by commands such as ``/research`` that may not have their own mapping
+    yet but should still operate in the context of the channel's project.
+    """
+    row = conn.execute(
+        "SELECT project_id FROM discord_mappings "
+        "WHERE guild_id = ? AND channel_id = ? ORDER BY id LIMIT 1",
+        (guild_id, channel_id),
     ).fetchone()
     return int(row[0]) if row is not None else None
 
@@ -814,18 +1008,306 @@ def list_snapshots_for_project(
 
 
 # =========================================================================
+# WorkItem
+# =========================================================================
+
+
+class WorkItem:
+    __slots__ = (
+        "body",
+        "created_at_utc",
+        "external_id",
+        "id",
+        "metadata_json",
+        "occurred_at_utc",
+        "project_id",
+        "source",
+        "status",
+        "title",
+        "work_type",
+    )
+
+    def __init__(
+        self,
+        id: int,
+        project_id: int,
+        work_type: str,
+        title: str,
+        body: str | None,
+        status: str,
+        source: str,
+        external_id: str | None,
+        occurred_at_utc: str | None,
+        created_at_utc: str,
+        metadata_json: str | None,
+    ) -> None:
+        self.id = id
+        self.project_id = project_id
+        self.work_type = work_type
+        self.title = title
+        self.body = body
+        self.status = status
+        self.source = source
+        self.external_id = external_id
+        self.occurred_at_utc = occurred_at_utc
+        self.created_at_utc = created_at_utc
+        self.metadata_json = metadata_json
+
+
+_WORK_ITEM_COLUMNS = (
+    "id, project_id, work_type, title, body, status, source, external_id, "
+    "occurred_at_utc, created_at_utc, metadata_json"
+)
+
+
+def _work_item_from_row(row: sqlite3.Row | tuple[object, ...]) -> WorkItem:
+    return WorkItem(
+        id=int(row[0]),  # type: ignore[arg-type]
+        project_id=int(row[1]),  # type: ignore[arg-type]
+        work_type=str(row[2]),
+        title=str(row[3]),
+        body=row[4] if row[4] is None else str(row[4]),
+        status=str(row[5]),
+        source=str(row[6]),
+        external_id=row[7] if row[7] is None else str(row[7]),
+        occurred_at_utc=row[8] if row[8] is None else str(row[8]),
+        created_at_utc=str(row[9]),
+        metadata_json=row[10] if row[10] is None else str(row[10]),
+    )
+
+
+def upsert_work_item(
+    conn: sqlite3.Connection,
+    project_id: int,
+    work_type: str,
+    title: str,
+    *,
+    body: str | None = None,
+    status: str = "done",
+    source: str = "manual",
+    external_id: str | None = None,
+    occurred_at_utc: str | None = None,
+    metadata_json: str | None = None,
+) -> WorkItem:
+    """Insert or update one unit of work attached to a project.
+
+    Git commits use ``source='git'`` and the commit hash as ``external_id`` so
+    repeated catalog imports stay idempotent.
+    """
+    row = conn.execute(
+        f"""
+        INSERT INTO work_items (
+            project_id, work_type, title, body, status, source, external_id,
+            occurred_at_utc, created_at_utc, metadata_json
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(project_id, source, external_id) DO UPDATE
+        SET work_type = excluded.work_type,
+            title = excluded.title,
+            body = excluded.body,
+            status = excluded.status,
+            occurred_at_utc = excluded.occurred_at_utc,
+            metadata_json = excluded.metadata_json
+        RETURNING {_WORK_ITEM_COLUMNS}
+        """,
+        (
+            project_id,
+            work_type,
+            title,
+            body,
+            status,
+            source,
+            external_id,
+            occurred_at_utc,
+            _utc_now(),
+            metadata_json,
+        ),
+    ).fetchone()
+    if row is None:
+        raise ValueError("WorkItem upsert returned no row")
+    return _work_item_from_row(row)
+
+
+def list_work_items_for_project(
+    conn: sqlite3.Connection, project_id: int, *, limit: int = 100
+) -> list[WorkItem]:
+    rows = conn.execute(
+        f"SELECT {_WORK_ITEM_COLUMNS} FROM work_items WHERE project_id = ? "
+        "ORDER BY COALESCE(occurred_at_utc, created_at_utc) DESC, id DESC LIMIT ?",
+        (project_id, max(1, min(limit, 500))),
+    ).fetchall()
+    return [_work_item_from_row(r) for r in rows]
+
+
+def count_work_items(conn: sqlite3.Connection, project_id: int) -> int:
+    row = conn.execute(
+        "SELECT COUNT(*) FROM work_items WHERE project_id = ?",
+        (project_id,),
+    ).fetchone()
+    return int(row[0]) if row is not None else 0
+
+
+# =========================================================================
+# CatalogImport
+# =========================================================================
+
+
+class CatalogImport:
+    __slots__ = (
+        "id",
+        "imported_at_utc",
+        "metadata_json",
+        "project_count",
+        "source_checksum",
+        "source_name",
+        "work_item_count",
+    )
+
+    def __init__(
+        self,
+        id: int,
+        source_name: str,
+        source_checksum: str,
+        imported_at_utc: str,
+        project_count: int,
+        work_item_count: int,
+        metadata_json: str | None,
+    ) -> None:
+        self.id = id
+        self.source_name = source_name
+        self.source_checksum = source_checksum
+        self.imported_at_utc = imported_at_utc
+        self.project_count = project_count
+        self.work_item_count = work_item_count
+        self.metadata_json = metadata_json
+
+
+def record_catalog_import(
+    conn: sqlite3.Connection,
+    *,
+    source_name: str,
+    source_checksum: str,
+    project_count: int,
+    work_item_count: int,
+    metadata_json: str | None = None,
+) -> CatalogImport:
+    row = conn.execute(
+        """
+        INSERT INTO catalog_imports (
+            source_name, source_checksum, imported_at_utc, project_count,
+            work_item_count, metadata_json
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(source_checksum) DO UPDATE
+        SET source_name = excluded.source_name,
+            imported_at_utc = excluded.imported_at_utc,
+            project_count = excluded.project_count,
+            work_item_count = excluded.work_item_count,
+            metadata_json = excluded.metadata_json
+        RETURNING id, source_name, source_checksum, imported_at_utc,
+                  project_count, work_item_count, metadata_json
+        """,
+        (
+            source_name,
+            source_checksum,
+            _utc_now(),
+            project_count,
+            work_item_count,
+            metadata_json,
+        ),
+    ).fetchone()
+    if row is None:
+        raise ValueError("CatalogImport upsert returned no row")
+    return CatalogImport(
+        id=int(row[0]),
+        source_name=str(row[1]),
+        source_checksum=str(row[2]),
+        imported_at_utc=str(row[3]),
+        project_count=int(row[4]),
+        work_item_count=int(row[5]),
+        metadata_json=row[6] if row[6] is None else str(row[6]),
+    )
+
+
+def get_catalog_import(conn: sqlite3.Connection, source_checksum: str) -> CatalogImport | None:
+    row = conn.execute(
+        "SELECT id, source_name, source_checksum, imported_at_utc, project_count, "
+        "work_item_count, metadata_json FROM catalog_imports WHERE source_checksum = ?",
+        (source_checksum,),
+    ).fetchone()
+    if row is None:
+        return None
+    return CatalogImport(
+        id=int(row[0]),
+        source_name=str(row[1]),
+        source_checksum=str(row[2]),
+        imported_at_utc=str(row[3]),
+        project_count=int(row[4]),
+        work_item_count=int(row[5]),
+        metadata_json=row[6] if row[6] is None else str(row[6]),
+    )
+
+
+def get_latest_catalog_import(conn: sqlite3.Connection) -> CatalogImport | None:
+    """Return the most recently imported catalog, if any."""
+    row = conn.execute(
+        "SELECT id, source_name, source_checksum, imported_at_utc, project_count, "
+        "work_item_count, metadata_json FROM catalog_imports "
+        "ORDER BY imported_at_utc DESC, id DESC LIMIT 1"
+    ).fetchone()
+    if row is None:
+        return None
+    return CatalogImport(
+        id=int(row[0]),
+        source_name=str(row[1]),
+        source_checksum=str(row[2]),
+        imported_at_utc=str(row[3]),
+        project_count=int(row[4]),
+        work_item_count=int(row[5]),
+        metadata_json=row[6] if row[6] is None else str(row[6]),
+    )
+
+
+def count_all_work_items(conn: sqlite3.Connection) -> int:
+    row = conn.execute("SELECT COUNT(*) FROM work_items").fetchone()
+    return int(row[0]) if row is not None else 0
+
+
+def count_research_jobs(conn: sqlite3.Connection) -> int:
+    row = conn.execute("SELECT COUNT(*) FROM research_jobs").fetchone()
+    return int(row[0]) if row is not None else 0
+
+
+def count_research_sources(conn: sqlite3.Connection, research_job_id: int) -> int:
+    row = conn.execute(
+        "SELECT COUNT(*) FROM research_sources WHERE research_job_id = ?",
+        (research_job_id,),
+    ).fetchone()
+    return int(row[0]) if row is not None else 0
+
+
+# =========================================================================
 # ResearchJob
 # =========================================================================
+
+
+_RESEARCH_JOB_COLUMNS = (
+    "id, project_id, user_id, question, status, started_at_utc, completed_at_utc, "
+    "result_summary, model_used, scope, provider, error_text"
+)
 
 
 class ResearchJob:
     __slots__ = (
         "completed_at_utc",
+        "error_text",
         "id",
         "model_used",
         "project_id",
+        "provider",
         "question",
         "result_summary",
+        "scope",
         "started_at_utc",
         "status",
         "user_id",
@@ -834,7 +1316,7 @@ class ResearchJob:
     def __init__(
         self,
         id: int,
-        project_id: int,
+        project_id: int | None,
         user_id: int | None,
         question: str,
         status: str,
@@ -842,6 +1324,10 @@ class ResearchJob:
         completed_at_utc: str | None,
         result_summary: str | None,
         model_used: str | None,
+        *,
+        scope: str = "web",
+        provider: str | None = None,
+        error_text: str | None = None,
     ) -> None:
         self.id = id
         self.project_id = project_id
@@ -852,65 +1338,117 @@ class ResearchJob:
         self.completed_at_utc = completed_at_utc
         self.result_summary = result_summary
         self.model_used = model_used
+        self.scope = scope
+        self.provider = provider
+        self.error_text = error_text
+
+
+def _research_job_from_row(row: sqlite3.Row | tuple[object, ...]) -> ResearchJob:
+    return ResearchJob(
+        id=int(row[0]),  # type: ignore[arg-type]
+        project_id=None if row[1] is None else int(row[1]),  # type: ignore[arg-type]
+        user_id=None if row[2] is None else int(row[2]),  # type: ignore[arg-type]
+        question=str(row[3]),
+        status=str(row[4]),
+        started_at_utc=str(row[5]),
+        completed_at_utc=row[6] if row[6] is None else str(row[6]),
+        result_summary=row[7] if row[7] is None else str(row[7]),
+        model_used=row[8] if row[8] is None else str(row[8]),
+        scope=str(row[9]),
+        provider=row[10] if row[10] is None else str(row[10]),
+        error_text=row[11] if row[11] is None else str(row[11]),
+    )
 
 
 def upsert_research_job(
     conn: sqlite3.Connection,
-    project_id: int,
+    project_id: int | None,
     user_id: int | None,
     question: str,
     status: str = "pending",
     model_used: str | None = None,
+    *,
+    scope: str = "web",
+    provider: str | None = None,
 ) -> ResearchJob:
+    """Create a new research job.  Repeated questions are separate jobs."""
     row = conn.execute(
-        """
-        INSERT INTO research_jobs (project_id, user_id, question, status, started_at_utc, completed_at_utc, result_summary, model_used)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(project_id, question) DO UPDATE
-        SET status = excluded.status,
-            started_at_utc = excluded.started_at_utc,
-            completed_at_utc = excluded.completed_at_utc,
-            result_summary = excluded.result_summary,
-            model_used = excluded.model_used
-        RETURNING id, project_id, user_id, question, status, started_at_utc, completed_at_utc, result_summary, model_used
+        f"""
+        INSERT INTO research_jobs (
+            project_id, user_id, question, status, started_at_utc,
+            completed_at_utc, result_summary, model_used, scope, provider
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        RETURNING {_RESEARCH_JOB_COLUMNS}
         """,
-        (project_id, user_id, question, status, _utc_now(), None, None, model_used),
+        (
+            project_id,
+            user_id,
+            question,
+            status,
+            _utc_now(),
+            None,
+            None,
+            model_used,
+            scope,
+            provider,
+        ),
     ).fetchone()
     if row is None:
         raise ValueError("ResearchJob upsert returned no row")
-    return ResearchJob(
-        id=row[0],
-        project_id=row[1],
-        user_id=row[2],
-        question=row[3],
-        status=row[4],
-        started_at_utc=row[5],
-        completed_at_utc=row[6],
-        result_summary=row[7],
-        model_used=row[8],
-    )
+    return _research_job_from_row(row)
+
+
+def complete_research_job(
+    conn: sqlite3.Connection,
+    job_id: int,
+    *,
+    status: str,
+    result_summary: str | None = None,
+    model_used: str | None = None,
+    error_text: str | None = None,
+) -> ResearchJob:
+    row = conn.execute(
+        f"""
+        UPDATE research_jobs
+        SET status = ?, completed_at_utc = ?, result_summary = ?, model_used = ?,
+            error_text = ?
+        WHERE id = ?
+        RETURNING {_RESEARCH_JOB_COLUMNS}
+        """,
+        (status, _utc_now(), result_summary, model_used, error_text, job_id),
+    ).fetchone()
+    if row is None:
+        raise ValueError("ResearchJob update returned no row")
+    return _research_job_from_row(row)
+
+
+def get_research_job(conn: sqlite3.Connection, job_id: int) -> ResearchJob | None:
+    row = conn.execute(
+        f"SELECT {_RESEARCH_JOB_COLUMNS} FROM research_jobs WHERE id = ?",
+        (job_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return _research_job_from_row(row)
 
 
 def list_research_jobs_for_project(conn: sqlite3.Connection, project_id: int) -> list[ResearchJob]:
     rows = conn.execute(
-        "SELECT id, project_id, user_id, question, status, started_at_utc, completed_at_utc, result_summary, model_used "
-        "FROM research_jobs WHERE project_id = ? ORDER BY started_at_utc DESC",
+        f"SELECT {_RESEARCH_JOB_COLUMNS} FROM research_jobs "
+        "WHERE project_id = ? ORDER BY started_at_utc DESC",
         (project_id,),
     ).fetchall()
-    return [
-        ResearchJob(
-            id=r[0],
-            project_id=r[1],
-            user_id=r[2],
-            question=r[3],
-            status=r[4],
-            started_at_utc=r[5],
-            completed_at_utc=r[6],
-            result_summary=r[7],
-            model_used=r[8],
-        )
-        for r in rows
-    ]
+    return [_research_job_from_row(r) for r in rows]
+
+
+def list_recent_research_jobs(conn: sqlite3.Connection, *, limit: int = 20) -> list[ResearchJob]:
+    rows = conn.execute(
+        f"SELECT {_RESEARCH_JOB_COLUMNS} FROM research_jobs "
+        "ORDER BY started_at_utc DESC, id DESC LIMIT ?",
+        (max(1, min(limit, 100)),),
+    ).fetchall()
+    return [_research_job_from_row(r) for r in rows]
 
 
 # =========================================================================
@@ -923,8 +1461,11 @@ class ResearchSource:
         "canonical_url",
         "content_hash",
         "id",
+        "relevance_score",
         "research_job_id",
         "retrieved_at_utc",
+        "snippet",
+        "source_ref",
         "source_type",
         "title",
     )
@@ -938,6 +1479,10 @@ class ResearchSource:
         source_type: str,
         retrieved_at_utc: str,
         content_hash: str,
+        *,
+        snippet: str | None = None,
+        relevance_score: float = 0.0,
+        source_ref: str | None = None,
     ) -> None:
         self.id = id
         self.research_job_id = research_job_id
@@ -946,6 +1491,30 @@ class ResearchSource:
         self.source_type = source_type
         self.retrieved_at_utc = retrieved_at_utc
         self.content_hash = content_hash
+        self.snippet = snippet
+        self.relevance_score = relevance_score
+        self.source_ref = source_ref
+
+
+_RESEARCH_SOURCE_COLUMNS = (
+    "id, research_job_id, title, canonical_url, source_type, retrieved_at_utc, "
+    "content_hash, snippet, relevance_score, source_ref"
+)
+
+
+def _research_source_from_row(row: sqlite3.Row | tuple[object, ...]) -> ResearchSource:
+    return ResearchSource(
+        id=int(row[0]),  # type: ignore[arg-type]
+        research_job_id=int(row[1]),  # type: ignore[arg-type]
+        title=str(row[2]),
+        canonical_url=row[3] if row[3] is None else str(row[3]),
+        source_type=str(row[4]),
+        retrieved_at_utc=str(row[5]),
+        content_hash=str(row[6]),
+        snippet=row[7] if row[7] is None else str(row[7]),
+        relevance_score=float(row[8]),  # type: ignore[arg-type]
+        source_ref=row[9] if row[9] is None else str(row[9]),
+    )
 
 
 def upsert_research_source(
@@ -955,28 +1524,134 @@ def upsert_research_source(
     canonical_url: str | None,
     source_type: str,
     content_hash: str,
+    *,
+    snippet: str | None = None,
+    relevance_score: float = 0.0,
+    source_ref: str | None = None,
 ) -> ResearchSource:
     row = conn.execute(
-        """
-        INSERT INTO research_sources (research_job_id, title, canonical_url, source_type, retrieved_at_utc, content_hash)
-        VALUES (?, ?, ?, ?, ?, ?)
+        f"""
+        INSERT INTO research_sources (
+            research_job_id, title, canonical_url, source_type, retrieved_at_utc,
+            content_hash, snippet, relevance_score, source_ref
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(research_job_id, title) DO UPDATE
         SET canonical_url = excluded.canonical_url,
             source_type = excluded.source_type,
             retrieved_at_utc = excluded.retrieved_at_utc,
-            content_hash = excluded.content_hash
-        RETURNING id, research_job_id, title, canonical_url, source_type, retrieved_at_utc, content_hash
+            content_hash = excluded.content_hash,
+            snippet = excluded.snippet,
+            relevance_score = excluded.relevance_score,
+            source_ref = excluded.source_ref
+        RETURNING {_RESEARCH_SOURCE_COLUMNS}
         """,
-        (research_job_id, title, canonical_url, source_type, _utc_now(), content_hash),
+        (
+            research_job_id,
+            title,
+            canonical_url,
+            source_type,
+            _utc_now(),
+            content_hash,
+            snippet,
+            relevance_score,
+            source_ref,
+        ),
     ).fetchone()
     if row is None:
         raise ValueError("ResearchSource upsert returned no row")
-    return ResearchSource(
-        id=row[0],
-        research_job_id=row[1],
-        title=row[2],
-        canonical_url=row[3],
-        source_type=row[4],
-        retrieved_at_utc=row[5],
-        content_hash=row[6],
+    return _research_source_from_row(row)
+
+
+def list_research_sources(conn: sqlite3.Connection, research_job_id: int) -> list[ResearchSource]:
+    rows = conn.execute(
+        f"SELECT {_RESEARCH_SOURCE_COLUMNS} FROM research_sources "
+        "WHERE research_job_id = ? ORDER BY relevance_score DESC, id ASC",
+        (research_job_id,),
+    ).fetchall()
+    return [_research_source_from_row(r) for r in rows]
+
+
+# =========================================================================
+# ResearchReport
+# =========================================================================
+
+
+class ResearchReport:
+    __slots__ = (
+        "citation_count",
+        "generated_at_utc",
+        "id",
+        "model_used",
+        "report_text",
+        "research_job_id",
+    )
+
+    def __init__(
+        self,
+        id: int,
+        research_job_id: int,
+        generated_at_utc: str,
+        model_used: str | None,
+        report_text: str,
+        citation_count: int,
+    ) -> None:
+        self.id = id
+        self.research_job_id = research_job_id
+        self.generated_at_utc = generated_at_utc
+        self.model_used = model_used
+        self.report_text = report_text
+        self.citation_count = citation_count
+
+
+def upsert_research_report(
+    conn: sqlite3.Connection,
+    research_job_id: int,
+    report_text: str,
+    *,
+    model_used: str | None = None,
+    citation_count: int = 0,
+) -> ResearchReport:
+    row = conn.execute(
+        """
+        INSERT INTO research_reports (
+            research_job_id, generated_at_utc, model_used, report_text, citation_count
+        )
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(research_job_id) DO UPDATE
+        SET generated_at_utc = excluded.generated_at_utc,
+            model_used = excluded.model_used,
+            report_text = excluded.report_text,
+            citation_count = excluded.citation_count
+        RETURNING id, research_job_id, generated_at_utc, model_used, report_text, citation_count
+        """,
+        (research_job_id, _utc_now(), model_used, report_text, citation_count),
+    ).fetchone()
+    if row is None:
+        raise ValueError("ResearchReport upsert returned no row")
+    return ResearchReport(
+        id=int(row[0]),
+        research_job_id=int(row[1]),
+        generated_at_utc=str(row[2]),
+        model_used=row[3] if row[3] is None else str(row[3]),
+        report_text=str(row[4]),
+        citation_count=int(row[5]),
+    )
+
+
+def get_research_report(conn: sqlite3.Connection, research_job_id: int) -> ResearchReport | None:
+    row = conn.execute(
+        "SELECT id, research_job_id, generated_at_utc, model_used, report_text, citation_count "
+        "FROM research_reports WHERE research_job_id = ?",
+        (research_job_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return ResearchReport(
+        id=int(row[0]),
+        research_job_id=int(row[1]),
+        generated_at_utc=str(row[2]),
+        model_used=row[3] if row[3] is None else str(row[3]),
+        report_text=str(row[4]),
+        citation_count=int(row[5]),
     )

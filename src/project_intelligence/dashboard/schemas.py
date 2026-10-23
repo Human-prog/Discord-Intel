@@ -130,9 +130,75 @@ class ProjectListItem(BaseModel):
 
     id: int
     name: str
+    description: str | None = None
     allowed_root: str
     status: HealthStatus
     last_checked: str
+    catalog_status: str | None = None
+    category: str | None = None
+    priority: str | None = None
+    tech_stack: list[str] = Field(default_factory=list)
+    source: str = "manual"
+    monitored: bool = True
+    last_activity_utc: str | None = None
+    work_item_count: int = Field(default=0, ge=0)
+    repo_url: str | None = None
+
+
+class WorkItemSummary(BaseModel):
+    """One unit of work recorded against a project."""
+
+    id: int
+    project_id: int
+    work_type: str
+    title: str
+    body: str | None = None
+    status: str
+    source: str
+    occurred_at_utc: str | None = None
+
+
+class ResearchSourceSummary(BaseModel):
+    id: int
+    title: str
+    url: str | None = None
+    source_type: str
+    snippet: str | None = None
+    relevance_score: float = 0.0
+    source_ref: str | None = None
+    retrieved_at_utc: str
+
+
+class ResearchJobSummary(BaseModel):
+    id: int
+    project_id: int | None = None
+    project_name: str | None = None
+    question: str
+    status: str
+    scope: str
+    provider: str | None = None
+    started_at_utc: str
+    completed_at_utc: str | None = None
+    result_summary: str | None = None
+    source_count: int = Field(default=0, ge=0)
+    error: str | None = None
+
+
+class ResearchJobDetail(ResearchJobSummary):
+    report_text: str | None = None
+    report_generated_at_utc: str | None = None
+    sources: list[ResearchSourceSummary] = Field(default_factory=list)
+
+
+class CatalogSummary(BaseModel):
+    project_count: int = Field(default=0, ge=0)
+    monitored_count: int = Field(default=0, ge=0)
+    catalog_count: int = Field(default=0, ge=0)
+    active_count: int = Field(default=0, ge=0)
+    work_item_count: int = Field(default=0, ge=0)
+    research_job_count: int = Field(default=0, ge=0)
+    categories: list[str] = Field(default_factory=list)
+    last_import_at_utc: str | None = None
 
 
 class ProjectDetail(BaseModel):
@@ -151,6 +217,19 @@ class ProjectDetail(BaseModel):
     health_freshness: str = Field(
         description="How recent the health snapshot is; one of 'fresh','stale','unknown'"
     )
+    catalog_status: str | None = None
+    category: str | None = None
+    priority: str | None = None
+    tech_stack: list[str] = Field(default_factory=list)
+    repo_url: str | None = None
+    local_path: str | None = None
+    source: str = "manual"
+    monitored: bool = True
+    last_activity_utc: str | None = None
+    work_item_count: int = Field(default=0, ge=0)
+    research_count: int = Field(default=0, ge=0)
+    recent_work: list[WorkItemSummary] = Field(default_factory=list)
+    recent_research: list[ResearchJobSummary] = Field(default_factory=list)
 
 
 class MilestoneListItem(BaseModel):
