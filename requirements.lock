@@ -17,7 +17,7 @@ cyclonedx-python-lib==11.12.0
 defusedxml==0.7.1
 discord.py==2.7.1
 fastapi==0.146.0
-filelock==4.2.0
+filelock==4.2.1
 frozenlist==1.8.0
 h11==0.16.0
 httpcore==1.0.9
