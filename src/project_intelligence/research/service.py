@@ -24,12 +24,24 @@ from project_intelligence.research.web_research import (
     WebFinding,
     research_web,
 )
+
+# Optional YouTube video research (Phase 15+ extension)
+try:
+    from project_intelligence.research.youtube import (
+        YouTubeFetcher,
+        research_youtube,
+        youtube_to_web_finding,
+    )
+
+    YOUTUBE_AVAILABLE = True
+except ImportError:
+    YOUTUBE_AVAILABLE = False
 from project_intelligence.storage import repositories as repo
 from project_intelligence.storage.database import get_conn
 
 logger = logging.getLogger(__name__)
 
-VALID_SCOPES = ("local", "web", "both")
+VALID_SCOPES = ("local", "web", "both", "youtube")
 
 
 @dataclass
@@ -62,7 +74,8 @@ def _combine_reports(
     provider: str | None,
     local_report: str | None,
     web_report: str | None,
-    notes: list[str],
+    youtube_report: str | None = None,
+    notes: list[str] | None = None,
 ) -> str:
     lines = [
         "# Research report",
@@ -86,7 +99,12 @@ def _combine_reports(
         lines.append("")
         lines.append(_strip_heading(web_report, "# Web research"))
         lines.append("")
-    if not local_report and not web_report:
+    if youtube_report:
+        lines.append("## YouTube videos")
+        lines.append("")
+        lines.append(_strip_heading(youtube_report, "# YouTube research"))
+        lines.append("")
+    if not local_report and not web_report and not youtube_report:
         lines.append("No sources were found.")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -176,6 +194,50 @@ def run_research(
     notes: list[str] = []
 
     try:
+        youtube_findings: list[WebFinding] = []
+        youtube_report: str | None = None
+
+        if normalized_scope == "youtube":
+            try:
+                from project_intelligence.research.youtube import (
+                    YouTubeFetcher,
+                    extract_video_id,
+                    is_youtube_url,
+                    research_youtube,
+                    youtube_to_web_finding,
+                )
+
+                youtube_urls = []
+                for line in normalized_question.splitlines():
+                    words = line.split()
+                    for word in words:
+                        url = word.strip()
+                        if is_youtube_url(url):
+                            youtube_urls.append(url)
+
+                # Also check for URLs embedded anywhere in the question
+                import re
+                url_matches = re.findall(
+                    r"https?://(?:www\.)?youtube\.com/[\w?/=%&#_-]+|https?://youtu\.be/[\w?/=%&#_-]+",
+                    normalized_question,
+                )
+                for url in url_matches:
+                    if is_youtube_url(url) and url not in youtube_urls:
+                        youtube_urls.append(url)
+
+                if not youtube_urls:
+                    youtube_urls = [normalized_question]
+
+                youtube_findings, youtube_report = research_youtube(
+                    normalized_question,
+                    youtube_urls,
+                    settings=settings,
+                )
+            except Exception as exc:
+                notes.append(f"YouTube research failed: {type(exc).__name__}")
+                youtube_findings = []
+                youtube_report = None
+
         if normalized_scope in {"local", "both"}:
             local_findings, local_report = research_local(
                 normalized_question,
@@ -234,15 +296,31 @@ def run_research(
 
         _store_local_sources(job.id, local_findings)
         _store_web_sources(job.id, web_findings)
+        if YOUTUBE_AVAILABLE and normalized_scope == "youtube":
+            from project_intelligence.research.youtube import research_youtube as _research_youtube
+
+            for finding in youtube_findings:
+                repo.upsert_research_source(
+                    conn,
+                    job.id,
+                    f"[youtube] {finding.title}"[:300],
+                    finding.url,
+                    "youtube",
+                    finding.content_hash or _content_hash(finding.url),
+                    snippet=finding.snippet,
+                    relevance_score=finding.score,
+                    source_ref=finding.url,
+                )
         report = _combine_reports(
             normalized_question,
             normalized_scope,
             provider_name,
             local_report,
             web_report,
+            youtube_report,
             notes,
         )
-        source_count = len(local_findings) + len(web_findings)
+        source_count = len(local_findings) + len(web_findings) + len(youtube_findings)
         repo.upsert_research_report(
             conn,
             job.id,

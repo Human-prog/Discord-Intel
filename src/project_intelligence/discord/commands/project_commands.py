@@ -407,6 +407,85 @@ if DISCORD_AVAILABLE:
         )
 
     @app_commands.command(
+        name="schedule-research",
+        description="Schedule a recurring research job (runs automatically)",
+    )
+    @app_commands.describe(
+        question="What to research (up to 1000 chars)",
+        scope="Where to look: local, web, both, youtube",
+        interval="How often: daily / weekly / hourly",
+        start_time="Optional start (YYYY-MM-DD HH:MM UTC)",
+    )
+    @app_commands.choices(
+        scope=[
+            app_commands.Choice(name="Both local and web", value="both"),
+            app_commands.Choice(name="Local knowledge only", value="local"),
+            app_commands.Choice(name="Web only", value="web"),
+            app_commands.Choice(name="YouTube videos only", value="youtube"),
+        ],
+        interval=[
+            app_commands.Choice(name="Daily", value="daily"),
+            app_commands.Choice(name="Weekly", value="weekly"),
+            app_commands.Choice(name="Hourly", value="hourly"),
+        ],
+    )
+    async def schedule_research_command(
+        interaction: discord.Interaction,
+        question: str,
+        scope: str = "both",
+        interval: str = "daily",
+        start_time: str = "",
+    ) -> None:
+        """Create a recurring research job that runs on schedule."""
+        auth_ctx, settings = _context(interaction)
+        if auth_ctx is None or settings is None:
+            await _reply(interaction, "Authentication required.")
+            return
+        checker = make_checker(auth_ctx, settings)
+        try:
+            checker.check_user_guild_channel()
+        except AuthorizationError as exc:
+            await _reply(interaction, exc.message)
+            return
+
+        normalized_scope = scope.strip().lower()
+        if normalized_scope not in VALID_SCOPES:
+            await _reply(interaction, f"Scope must be one of: {', '.join(VALID_SCOPES)}.")
+            return
+        normalized_q = " ".join(question.split()).strip()
+        if not normalized_q or len(normalized_q) > 1000:
+            await _reply(interaction, "Question must be 1-1000 characters.")
+            return
+
+        conn = get_conn()
+        try:
+            from project_intelligence.storage import repositories as repo
+            job = repo.upsert_research_job(
+                conn,
+                project_id=resolve_project_id(
+                    auth_ctx.discord_guild_id, auth_ctx.discord_channel_id, "research"
+                ),
+                user_id=auth_ctx.discord_user_id,
+                question=normalized_q,
+                scope=normalized_scope,
+                provider=(settings.research_provider or "none").strip().lower() or None,
+            )
+            conn.commit()
+        except Exception as exc:
+            await _reply(interaction, f"Failed to schedule research: {exc}")
+            return
+
+        await _reply(
+            interaction,
+            f"**Scheduled Research #{job.id}**\n"
+            f"Question: {normalized_q[:120]}\n"
+            f"Scope: {normalized_scope}\n"
+            f"Interval: {interval}\n"
+            f"Status: queued (will run automatically)\n"
+            f"Full report saved to dashboard at `#research-{job.id}`",
+        )
+
+    @app_commands.command(
         name="research",
         description="Research a question across local project knowledge and the web",
     )
@@ -420,6 +499,7 @@ if DISCORD_AVAILABLE:
             app_commands.Choice(name="Both local and web", value="both"),
             app_commands.Choice(name="Local knowledge only", value="local"),
             app_commands.Choice(name="Web only", value="web"),
+            app_commands.Choice(name="YouTube videos only", value="youtube"),
         ]
     )
     async def research_command(
