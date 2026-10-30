@@ -86,6 +86,14 @@ def _combine_reports(
         f"**Web provider:** {provider or 'not configured'}",
         "",
     ]
+    # If youtube_report passed as a list (notes), treat as notes; skip YouTube section
+    if isinstance(youtube_report, list):
+        if notes is None:
+            notes = youtube_report
+        else:
+            notes = notes + youtube_report
+        youtube_report = None
+
     if notes:
         lines.extend(f"> {note}" for note in notes)
         lines.append("")
