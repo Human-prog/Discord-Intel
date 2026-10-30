@@ -18,6 +18,7 @@ from typing import Any, cast
 
 from project_intelligence.config import Settings, load_settings
 from project_intelligence.discord.commands import project_commands
+from project_intelligence.discord.voice import register_voice_commands
 from project_intelligence.security import (
     DEFAULT_RATE_LIMITS,
     AuthError,
@@ -52,6 +53,7 @@ except ImportError:
 if DISCORD_AVAILABLE:
     INTENTS = discord.Intents.default()
     INTENTS.message_content = False  # No message content scraping
+    INTENTS.voice_states = True  # Required for voice client management
 
     class DiscordBot(commands.Bot):
         """Discord bot with centralized authorization and minimal intents."""
@@ -87,6 +89,7 @@ if DISCORD_AVAILABLE:
 
         async def setup_hook(self) -> None:
             """Register guild-scoped commands for development."""
+            register_voice_commands(self)  # Register voice commands first
             if self.settings.discord_allowed_guild_ids:
                 for guild_id in self.settings.discord_allowed_guild_ids:
                     guild = discord.Object(id=guild_id)
@@ -146,6 +149,12 @@ if DISCORD_AVAILABLE:
 - `/blocker` - View or record project blockers
 - `/health` - Inspect project health snapshots
 - `/research` - Research local knowledge and the web with citations
+- `/schedule-research` - Schedule recurring research jobs
+
+**Voice:**
+- `/voice-join` - Join your voice channel
+- `/voice-leave` - Leave the voice channel
+- `/voice-status` - Show voice connection status
 
 **Owner only:**
 - `/create-project` - Register a project directory and connect it to this channel
@@ -223,6 +232,7 @@ def create_bot(settings: Settings | None = None) -> DiscordBot:
         project_commands.note_command,
         project_commands.health_command,
         project_commands.research_command,
+        project_commands.schedule_research_command,
     )
     for command in extra_commands:
         if command is not None:

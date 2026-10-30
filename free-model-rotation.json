@@ -1,0 +1,49 @@
+{
+  "//": "OpenCode configuration: free-model rotation pool",
+  "description": "Circulates requests across all available free LLM providers so no single model blocks work.",
+  "providers": {
+    "openrouter/free": {
+      "models": [
+        "openrouter/openrouter/free",
+        "openrouter/google/gemma-4-26b-a4b-it:free",
+        "openrouter/cohere/north-mini-code:free",
+        "openrouter/liquid/lfm-2.5-2.6b:free",
+        "openrouter/nvidia/nemotron-3.5-super-vl:free",
+        "openrouter/recursive/flint-v1.0:free"
+      ],
+      "strategy": "round-robin",
+      "fallback_on_rate_limit": true
+    },
+    "opencode/free": {
+      "models": [
+        "opencode/mimo-v2.6-flash-free",
+        "opencode/deepseek-v4.1-flash-free",
+        "opencode/glm-5.3-flash-free",
+        "opencode/flint-40b-free",
+        "opencode/nemotron-3.5-super-vl-free",
+        "opencode/beam-free"
+      ],
+      "strategy": "round-robin",
+      "fallback_on_rate_limit": true
+    }
+  },
+  "rotation": {
+    "enabled": true,
+    "order": [
+      "openrouter/openrouter/free",
+      "opencode/mimo-v2.6-flash-free",
+      "openrouter/google/gemma-4-26b-a4b-it:free",
+      "opencode/deepseek-v4.1-flash-free",
+      "openrouter/cohere/north-mini-code:free",
+      "opencode/glm-5.3-flash-free",
+      "openrouter/liquid/lfm-2.5-2.6b:free",
+      "opencode/flint-40b-free",
+      "openrouter/nvidia/nemotron-3.5-super-vl:free",
+      "opencode/nemotron-3.5-super-vl-free",
+      "openrouter/recursive/flint-v1.0:free",
+      "opencode/beam-free"
+    ],
+    "cycle_every_request": true,
+    "reset_after_completion": false
+  }
+}
