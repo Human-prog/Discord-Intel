@@ -61,8 +61,9 @@ def _content_hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _strip_heading(report: str, heading: str) -> str:
-    lines = report.strip().splitlines()
+def _strip_heading(report: str | list[str], heading: str) -> str:
+    text = "\n".join(report) if isinstance(report, list) else (report if isinstance(report, str) else "")
+    lines = text.strip().splitlines()
     if lines and lines[0].strip() == heading:
         lines = lines[1:]
     return "\n".join(lines).strip()
