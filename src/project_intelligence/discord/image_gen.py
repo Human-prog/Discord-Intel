@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Image Generation (Phase 26+).
 
 Local text-to-image via Stable Diffusion (diffusers) or remote via

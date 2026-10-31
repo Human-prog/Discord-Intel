@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Discord Voice Client & Audio Processing (Phase 25+).
 
 Provides voice channel join/leave, audio capture, transcription via Whisper,

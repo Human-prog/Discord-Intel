@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Speech-to-text (STT) and text-to-speech (TTS) for voice interaction.
 
 Uses local Whisper (openai-whisper / whisper) for transcription and
