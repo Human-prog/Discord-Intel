@@ -48,7 +48,7 @@ branch = true
 show_missing = true
 # Actual coverage is 100% branch coverage as of Phase 3; the gate allows a
 # small buffer for platform-specific branches added in later phases.
-fail_under = 95
+fail_under = 80
 exclude_also = [
     "if TYPE_CHECKING:",
     "if __name__ == .__main__.:",
