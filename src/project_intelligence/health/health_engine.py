@@ -167,6 +167,20 @@ def check_project_health(
 
     details["git_head"] = result["git_head"]
     details["git_dirty"] = result["git_dirty"]
+
+    # Phase 27+ feature modules
+    try:
+        from project_intelligence.discord.voice import VOICE_SPEECH_AVAILABLE
+        from project_intelligence.discord.image_gen import IMAGE_GEN_AVAILABLE
+        from project_intelligence.discord.vision import VISION_AVAILABLE
+        result["new_modules"] = {
+            "voice": VOICE_SPEECH_AVAILABLE,
+            "image_gen": IMAGE_GEN_AVAILABLE,
+            "vision": VISION_AVAILABLE,
+        }
+    except Exception:
+        result["new_modules"] = {"voice": False, "image_gen": False, "vision": False}
+
     return result
 
 
