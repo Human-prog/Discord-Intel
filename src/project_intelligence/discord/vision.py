@@ -80,3 +80,6 @@ def get_vision_engine() -> VisionEngine:
     if _vision is None:
         _vision = VisionEngine()
     return _vision
+
+
+VISION_AVAILABLE = False  # set on import if engine loads

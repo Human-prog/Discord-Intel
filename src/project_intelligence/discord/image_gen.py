@@ -74,3 +74,6 @@ def get_image_generator() -> ImageGenerator:
     if _image_gen is None:
         _image_gen = ImageGenerator()
     return _image_gen
+
+
+IMAGE_GEN_AVAILABLE = False  # set on import if pipeline loads
