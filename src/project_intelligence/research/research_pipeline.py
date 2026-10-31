@@ -116,10 +116,7 @@ class ResearchPipeline:
         if not self.allowed_domains:
             return False
         domain = domain.lower()
-        for allowed in self.allowed_domains:
-            if domain == allowed or domain.endswith(f".{allowed}"):
-                return True
-        return False
+        return any(domain == allowed or domain.endswith(f".{allowed}") for allowed in self.allowed_domains)
 
     def normalize_url(self, url: str) -> str | None:
         """Normalize and validate a URL."""

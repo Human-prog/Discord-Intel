@@ -27,12 +27,6 @@ from project_intelligence.research.web_research import (
 
 # Optional YouTube video research (Phase 15+ extension)
 try:
-    from project_intelligence.research.youtube import (
-        YouTubeFetcher,
-        research_youtube,
-        youtube_to_web_finding,
-    )
-
     YOUTUBE_AVAILABLE = True
 except ImportError:
     YOUTUBE_AVAILABLE = False

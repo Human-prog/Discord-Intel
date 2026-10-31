@@ -48,10 +48,7 @@ def _check_path_exists(root: Path, check_path: Path, allowed: bool = True) -> di
         if not resolved.is_relative_to(root.resolve()):
             return {"status": "failed", "reason": "path escapes allowed root"}
         exists = resolved.is_file() or resolved.is_dir()
-        if allowed:
-            status = "healthy" if exists else "stale"
-        else:
-            status = "healthy" if not exists else "unhealthy"
+        status = ("healthy" if exists else "stale") if allowed else "healthy" if not exists else "unhealthy"
         return {"status": status, "path": str(resolved), "exists": exists}
     except Exception as exc:  # pylint: disable-broad-except
         return {"status": "failed", "reason": str(exc)}
