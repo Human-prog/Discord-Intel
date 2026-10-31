@@ -235,9 +235,7 @@ class Settings(BaseSettings):
                 try:
                     number = int(item)
                 except (TypeError, ValueError):
-                    raise ValueError(
-                        "must be a comma-separated list of numeric Discord IDs"
-                    ) from None
+                    raise ValueError("must be a comma-separated list of numeric Discord IDs") from None
                 if number < 1:
                     raise ValueError("Discord IDs must be positive numbers")
                 if number not in seen:
@@ -259,9 +257,7 @@ class Settings(BaseSettings):
         for item in v:
             name = str(item).strip()
             if not _REPO_NAME_RE.match(name):
-                raise ValueError(
-                    "each repository must look like 'owner/repo' (no URLs, no extra path segments)"
-                )
+                raise ValueError("each repository must look like 'owner/repo' (no URLs, no extra path segments)")
             result.append(name)
         return result
 
@@ -369,8 +365,7 @@ class Settings(BaseSettings):
         if self.opencode_enabled:
             if not self.opencode_command:
                 raise ValueError(
-                    "OPENCODE_ENABLED=true requires OPENCODE_COMMAND; "
-                    "the integration is disabled by default by design"
+                    "OPENCODE_ENABLED=true requires OPENCODE_COMMAND; the integration is disabled by default by design"
                 )
             if not self.opencode_allowed_worktrees:
                 raise ValueError(
@@ -382,18 +377,15 @@ class Settings(BaseSettings):
         if self.app_env == "production":
             if not Path(self.data_dir).is_absolute():
                 raise ValueError(
-                    "production requires an absolute DATA_DIR "
-                    "(relative paths depend on the working directory)"
+                    "production requires an absolute DATA_DIR (relative paths depend on the working directory)"
                 )
             if not Path(self.database_path).is_absolute():
                 raise ValueError(
-                    "production requires an absolute DATABASE_PATH "
-                    "(or an absolute DATA_DIR to derive it from)"
+                    "production requires an absolute DATABASE_PATH (or an absolute DATA_DIR to derive it from)"
                 )
             if self.dashboard_session_secret_file is None:
                 raise ValueError(
-                    "production requires DASHBOARD_SESSION_SECRET_FILE "
-                    "(no implicit session secret is ever generated)"
+                    "production requires DASHBOARD_SESSION_SECRET_FILE (no implicit session secret is ever generated)"
                 )
             for field_name in _SECRET_FIELDS:
                 secret = getattr(self, field_name)

@@ -28,6 +28,7 @@ class ImageGenerator:
         try:
             import torch
             from diffusers import StableDiffusionPipeline  # type: ignore
+
             self._pipeline = StableDiffusionPipeline.from_pretrained(
                 self.model_id,
                 torch_dtype=torch.float32,

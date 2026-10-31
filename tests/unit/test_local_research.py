@@ -81,16 +81,10 @@ def _seed(db):
         0.9,
         "The bot dashboard can research the web",
     )
-    job = repo.upsert_research_job(
-        db, alpha.id, None, "Previous research question", scope="both", provider="tavily"
-    )
-    repo.upsert_research_report(
-        db, job.id, "Earlier report about research and Discord", citation_count=1
-    )
+    job = repo.upsert_research_job(db, alpha.id, None, "Previous research question", scope="both", provider="tavily")
+    repo.upsert_research_report(db, job.id, "Earlier report about research and Discord", citation_count=1)
     global_job = repo.upsert_research_job(db, None, None, "Global research", scope="local")
-    repo.upsert_research_report(
-        db, global_job.id, "Global report about local knowledge", citation_count=1
-    )
+    repo.upsert_research_report(db, global_job.id, "Global report about local knowledge", citation_count=1)
     db.commit()
     return alpha, beta
 

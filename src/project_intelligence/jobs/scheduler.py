@@ -158,8 +158,7 @@ class Scheduler:
             next_run = datetime.now(UTC) + timedelta(seconds=min(300, 2**3))
             next_run_str = next_run.isoformat().replace("+00:00", "Z")
             conn.execute(
-                "UPDATE scheduled_jobs SET status = ?, last_run_utc = ?, "
-                "next_run_utc = ?, result = ? WHERE id = ?",
+                "UPDATE scheduled_jobs SET status = ?, last_run_utc = ?, next_run_utc = ?, result = ? WHERE id = ?",
                 (JobStatus.pending, now, next_run_str, f"FAILED: {error}", job_id),
             )
         else:

@@ -120,12 +120,7 @@ def test_verify_owner_secret(app_settings) -> None:
 
 
 def test_verify_owner_secret_without_configuration(make_settings) -> None:
-    assert (
-        session_auth.verify_owner_secret(
-            "anything", make_settings(dashboard_session_secret_file=None)
-        )
-        is False
-    )
+    assert session_auth.verify_owner_secret("anything", make_settings(dashboard_session_secret_file=None)) is False
 
 
 # ---------------------------------------------------------------------------

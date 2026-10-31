@@ -47,9 +47,7 @@ def test_numeric_strings_are_accepted() -> None:
     assert ctx.discord_user_id == USER
 
 
-@pytest.mark.parametrize(
-    "field", ["interaction_user_id", "interaction_guild_id", "interaction_channel_id"]
-)
+@pytest.mark.parametrize("field", ["interaction_user_id", "interaction_guild_id", "interaction_channel_id"])
 @pytest.mark.parametrize("value", [None, "", "not-a-number", 0, -1])
 def test_invalid_snowflakes_are_rejected(field: str, value) -> None:
     kwargs = {
@@ -75,9 +73,7 @@ def test_empty_owner_list_means_no_discord_owner(make_settings) -> None:
 
 def test_owner_session_is_always_owner(make_settings) -> None:
     settings = make_settings(discord_owner_user_ids=[])
-    ctx = _context(
-        discord_user_id=1, discord_guild_id=0, discord_channel_id=0, auth_via="owner_session"
-    )
+    ctx = _context(discord_user_id=1, discord_guild_id=0, discord_channel_id=0, auth_via="owner_session")
     assert ctx.is_owner(settings) is True
 
 

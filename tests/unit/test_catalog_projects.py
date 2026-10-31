@@ -79,12 +79,8 @@ def test_time_and_status_helpers() -> None:
 
 def test_sanitize_repo_url() -> None:
     assert _sanitize_repo_url("") is None
-    assert (
-        _sanitize_repo_url("git@github.com:owner/repo.git") == "https://github.com/owner/repo.git"
-    )
-    assert _sanitize_repo_url("https://user:pass@example.com:8443/a/b.git/") == (
-        "https://example.com:8443/a/b.git"
-    )
+    assert _sanitize_repo_url("git@github.com:owner/repo.git") == "https://github.com/owner/repo.git"
+    assert _sanitize_repo_url("https://user:pass@example.com:8443/a/b.git/") == ("https://example.com:8443/a/b.git")
     assert _sanitize_repo_url("http://example.com/repo?x=1#frag") == "http://example.com/repo?x=1"
     assert _sanitize_repo_url("ssh://example.com/repo") is None
     assert _sanitize_repo_url("https:///repo") is None
@@ -358,9 +354,7 @@ def test_build_catalog(tmp_path) -> None:
     (repo / "pyproject.toml").write_text(
         '[project]\nname = "alpha-project"\ndescription = "A test project"\n', encoding="utf-8"
     )
-    (repo / "README.md").write_text(
-        "A longer README description for the project.\n", encoding="utf-8"
-    )
+    (repo / "README.md").write_text("A longer README description for the project.\n", encoding="utf-8")
     _git(repo, "add", ".")
     _git(
         repo,
@@ -389,9 +383,7 @@ def test_build_catalog(tmp_path) -> None:
     # A project without Git still gets file-based activity and status.
     plain = tmp_path / "Plain"
     plain.mkdir()
-    (plain / "README.md").write_text(
-        "A plain project description with enough text.\n", encoding="utf-8"
-    )
+    (plain / "README.md").write_text("A plain project description with enough text.\n", encoding="utf-8")
     (plain / "main.py").write_text("print('plain')\n", encoding="utf-8")
     catalog = build_catalog(tmp_path, max_commits=0)
     names = {project["name"] for project in catalog["projects"]}

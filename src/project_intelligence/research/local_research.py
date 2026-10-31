@@ -248,9 +248,7 @@ class LocalResearcher:
         rows = self.conn.execute("SELECT id, name FROM projects").fetchall()
         return {int(row[0]): str(row[1]) for row in rows}
 
-    def _search_projects(
-        self, tokens: list[str], phrase: str, project_id: int | None
-    ) -> list[LocalFinding]:
+    def _search_projects(self, tokens: list[str], phrase: str, project_id: int | None) -> list[LocalFinding]:
         names = self._project_names()
         results: list[LocalFinding] = []
         for row in self._project_rows(project_id):
@@ -270,15 +268,9 @@ class LocalResearcher:
                 )
                 if part
             )
-            name_score, name_matches = _score_tokens(
-                tokens, name, _FIELD_WEIGHTS["project_name"], phrase
-            )
-            desc_score, desc_matches = _score_tokens(
-                tokens, description, _FIELD_WEIGHTS["project_description"], phrase
-            )
-            extra_score, extra_matches = _score_tokens(
-                tokens, extra, _FIELD_WEIGHTS["project_meta"], phrase
-            )
+            name_score, name_matches = _score_tokens(tokens, name, _FIELD_WEIGHTS["project_name"], phrase)
+            desc_score, desc_matches = _score_tokens(tokens, description, _FIELD_WEIGHTS["project_description"], phrase)
+            extra_score, extra_matches = _score_tokens(tokens, extra, _FIELD_WEIGHTS["project_meta"], phrase)
             score = name_score + desc_score + extra_score
             if score <= 0:
                 continue
@@ -305,9 +297,7 @@ class LocalResearcher:
             )
         return results
 
-    def _search_work_items(
-        self, tokens: list[str], phrase: str, project_id: int | None
-    ) -> list[LocalFinding]:
+    def _search_work_items(self, tokens: list[str], phrase: str, project_id: int | None) -> list[LocalFinding]:
         sql = (
             "SELECT w.id, w.project_id, w.work_type, w.title, w.body, w.source, "
             "w.external_id, w.occurred_at_utc, p.name "
@@ -322,12 +312,8 @@ class LocalResearcher:
         for row in self.conn.execute(sql, params).fetchall():
             title = _text(row[3])
             body = _text(row[4])
-            title_score, title_matches = _score_tokens(
-                tokens, title, _FIELD_WEIGHTS["work_title"], phrase
-            )
-            body_score, body_matches = _score_tokens(
-                tokens, body, _FIELD_WEIGHTS["work_body"], phrase
-            )
+            title_score, title_matches = _score_tokens(tokens, title, _FIELD_WEIGHTS["work_title"], phrase)
+            body_score, body_matches = _score_tokens(tokens, body, _FIELD_WEIGHTS["work_body"], phrase)
             score = title_score + body_score
             if score <= 0:
                 continue
@@ -350,9 +336,7 @@ class LocalResearcher:
             )
         return results
 
-    def _search_notes(
-        self, tokens: list[str], phrase: str, project_id: int | None
-    ) -> list[LocalFinding]:
+    def _search_notes(self, tokens: list[str], phrase: str, project_id: int | None) -> list[LocalFinding]:
         sql = (
             "SELECT n.id, n.project_id, n.content, n.created_at_utc, p.name "
             "FROM notes n LEFT JOIN projects p ON p.id = n.project_id"
@@ -383,9 +367,7 @@ class LocalResearcher:
             )
         return results
 
-    def _search_milestones(
-        self, tokens: list[str], phrase: str, project_id: int | None
-    ) -> list[LocalFinding]:
+    def _search_milestones(self, tokens: list[str], phrase: str, project_id: int | None) -> list[LocalFinding]:
         sql = (
             "SELECT m.id, m.project_id, m.title, m.description, m.status, "
             "m.target_date_utc, p.name FROM milestones m "
@@ -417,9 +399,7 @@ class LocalResearcher:
             )
         return results
 
-    def _search_evidence(
-        self, tokens: list[str], phrase: str, project_id: int | None
-    ) -> list[LocalFinding]:
+    def _search_evidence(self, tokens: list[str], phrase: str, project_id: int | None) -> list[LocalFinding]:
         sql = (
             "SELECT e.id, e.project_id, e.title, e.claim, e.retrieved_at_utc, p.name "
             "FROM evidence e LEFT JOIN projects p ON p.id = e.project_id"
@@ -450,9 +430,7 @@ class LocalResearcher:
             )
         return results
 
-    def _search_reports(
-        self, tokens: list[str], phrase: str, project_id: int | None
-    ) -> list[LocalFinding]:
+    def _search_reports(self, tokens: list[str], phrase: str, project_id: int | None) -> list[LocalFinding]:
         sql = (
             "SELECT r.id, j.id, j.project_id, j.question, r.report_text, "
             "r.generated_at_utc, p.name FROM research_reports r "

@@ -197,9 +197,7 @@ def test_brave_owned_client_closes(make_settings) -> None:
     provider = BraveProvider(make_settings(research_api_key="secret"))
     owned = provider._http()
     owned.close()
-    provider._client = _transport(
-        lambda request: httpx.Response(200, json={"web": {"results": []}})
-    )
+    provider._client = _transport(lambda request: httpx.Response(200, json={"web": {"results": []}}))
     provider._owns_client = True
     provider.close()
     assert provider._client is None
@@ -214,12 +212,8 @@ def test_provider_from_settings(make_settings) -> None:
         provider_from_settings(make_settings(research_provider="none"))
     with pytest.raises(ResearchNotConfigured, match="Unknown RESEARCH_PROVIDER"):
         provider_from_settings(SimpleNamespace(research_provider="unknown"))
-    assert isinstance(
-        provider_from_settings(make_settings(research_provider="tavily")), TavilyProvider
-    )
-    assert isinstance(
-        provider_from_settings(make_settings(research_provider="brave")), BraveProvider
-    )
+    assert isinstance(provider_from_settings(make_settings(research_provider="tavily")), TavilyProvider)
+    assert isinstance(provider_from_settings(make_settings(research_provider="brave")), BraveProvider)
 
 
 # ---------------------------------------------------------------------------
@@ -243,9 +237,7 @@ def test_validate_url_rejects_unsafe_and_non_public(make_settings) -> None:
         with pytest.raises(ResearchError):
             fetcher._validate_url(url)
     with pytest.raises(ResearchError):
-        _fetcher(settings, lambda request: httpx.Response(200), private_resolver)._validate_url(
-            "https://example.com/"
-        )
+        _fetcher(settings, lambda request: httpx.Response(200), private_resolver)._validate_url("https://example.com/")
     with pytest.raises(ResearchError):
         _fetcher(
             make_settings(research_allowed_domains=["allowed.example"]),
@@ -326,16 +318,12 @@ def test_fetch_rejects_error_status_content_type_and_size(make_settings) -> None
     with pytest.raises(ResearchError, match="Unsupported content type"):
         _fetcher(
             settings,
-            lambda request: httpx.Response(
-                200, headers={"content-type": "application/pdf"}, content=b"pdf"
-            ),
+            lambda request: httpx.Response(200, headers={"content-type": "application/pdf"}, content=b"pdf"),
         ).fetch("https://example.com/")
     with pytest.raises(ResearchError, match="size limit"):
         _fetcher(
             settings,
-            lambda request: httpx.Response(
-                200, headers={"content-type": "text/plain"}, content=b"x" * 20_000
-            ),
+            lambda request: httpx.Response(200, headers={"content-type": "text/plain"}, content=b"x" * 20_000),
         ).fetch("https://example.com/")
 
 
@@ -518,9 +506,7 @@ def test_research_web_keeps_title_when_page_title_is_url(make_settings) -> None:
             )
         }
     )
-    usable, _ = research_web(
-        "q", settings=make_settings(), provider=FakeProvider(findings), fetcher=fetcher
-    )
+    usable, _ = research_web("q", settings=make_settings(), provider=FakeProvider(findings), fetcher=fetcher)
     assert usable[0].title == "Search title"
 
 
@@ -549,8 +535,6 @@ def test_research_web_closes_owned_dependencies(make_settings, monkeypatch) -> N
 def test_research_status_never_exposes_key(make_settings) -> None:
     status = research_status(make_settings())
     assert status["configured"] is False
-    configured = research_status(
-        make_settings(research_provider="tavily", research_api_key="secret")
-    )
+    configured = research_status(make_settings(research_provider="tavily", research_api_key="secret"))
     assert configured["configured"] is True
     assert "secret" not in repr(configured)

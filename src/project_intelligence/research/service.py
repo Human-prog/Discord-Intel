@@ -165,9 +165,7 @@ def run_research(
         raise ValueError(f"Project {project_id} was not found")
 
     provider_name = (
-        (settings.research_provider or "").strip().lower() or None
-        if normalized_scope in {"web", "both"}
-        else None
+        (settings.research_provider or "").strip().lower() or None if normalized_scope in {"web", "both"} else None
     )
     job = repo.upsert_research_job(
         conn,
@@ -214,6 +212,7 @@ def run_research(
 
                 # Also check for URLs embedded anywhere in the question
                 import re
+
                 url_matches = re.findall(
                     r"https?://(?:www\.)?youtube\.com/[\w?/=%&#_-]+|https?://youtu\.be/[\w?/=%&#_-]+",
                     normalized_question,
@@ -294,7 +293,6 @@ def run_research(
         _store_local_sources(job.id, local_findings)
         _store_web_sources(job.id, web_findings)
         if YOUTUBE_AVAILABLE and normalized_scope == "youtube":
-
             for finding in youtube_findings:
                 repo.upsert_research_source(
                     conn,

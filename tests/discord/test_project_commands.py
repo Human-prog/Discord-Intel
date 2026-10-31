@@ -93,9 +93,7 @@ def test_connect_project_rejects_unknown_project(db, app_settings) -> None:
     assert "was not found" in interaction.last_message
 
 
-def test_connect_project_rejects_roots_outside_the_allowlist(
-    db, app_settings, tmp_path: Path
-) -> None:
+def test_connect_project_rejects_roots_outside_the_allowlist(db, app_settings, tmp_path: Path) -> None:
     outside = tmp_path / "outside"
     outside.mkdir()
     project = repo.upsert_project(db, "Outside", None, str(outside))
@@ -151,11 +149,7 @@ def _allowed_root(app_settings, name: str = "alpha") -> Path:
 def test_create_project_is_owner_only(db, app_settings) -> None:
     interaction = _interaction(app_settings, user_id=OTHER_USER_ID)
 
-    _run(
-        commands.create_project_command.callback(
-            interaction, "Alpha", str(_allowed_root(app_settings))
-        )
-    )
+    _run(commands.create_project_command.callback(interaction, "Alpha", str(_allowed_root(app_settings))))
 
     assert "Only owners" in interaction.last_message
     assert repo.list_projects(db) == []
@@ -194,9 +188,7 @@ def test_create_project_rejects_file_root(db, app_settings) -> None:
     assert repo.list_projects(db) == []
 
 
-def test_create_project_rejects_root_outside_the_allowlist(
-    db, app_settings, tmp_path: Path
-) -> None:
+def test_create_project_rejects_root_outside_the_allowlist(db, app_settings, tmp_path: Path) -> None:
     outside = tmp_path / "outside"
     outside.mkdir()
     interaction = _interaction(app_settings)
@@ -211,11 +203,7 @@ def test_create_project_registers_and_maps(db, app_settings) -> None:
     root = _allowed_root(app_settings)
     interaction = _interaction(app_settings)
 
-    _run(
-        commands.create_project_command.callback(
-            interaction, "  Alpha  ", str(root), "  sample project  "
-        )
-    )
+    _run(commands.create_project_command.callback(interaction, "  Alpha  ", str(root), "  sample project  "))
 
     assert "created and connected" in interaction.last_message
     project = repo.get_project_by_root(db, str(root))
@@ -240,11 +228,7 @@ def test_create_project_connects_an_existing_root(db, app_settings) -> None:
 def test_create_project_rejects_an_overlong_name(db, app_settings) -> None:
     interaction = _interaction(app_settings)
 
-    _run(
-        commands.create_project_command.callback(
-            interaction, "x" * 201, str(_allowed_root(app_settings))
-        )
-    )
+    _run(commands.create_project_command.callback(interaction, "x" * 201, str(_allowed_root(app_settings))))
 
     assert "between 1 and 200 characters" in interaction.last_message
     assert repo.list_projects(db) == []
@@ -476,9 +460,7 @@ def test_research_requires_auth_and_settings(app_settings) -> None:
     assert interaction.last_message == "Authentication required."
 
 
-def test_research_rejects_invalid_scope_empty_and_overlong_question(
-    db, app_settings, monkeypatch
-) -> None:
+def test_research_rejects_invalid_scope_empty_and_overlong_question(db, app_settings, monkeypatch) -> None:
     _allow_research(monkeypatch)
     interaction = _interaction(app_settings)
 
@@ -520,9 +502,7 @@ def test_research_requires_project_access(db, app_settings, monkeypatch) -> None
     assert "not authorized" in interaction.last_message
 
 
-def test_research_uses_the_channel_project_and_returns_a_report(
-    db, app_settings, monkeypatch
-) -> None:
+def test_research_uses_the_channel_project_and_returns_a_report(db, app_settings, monkeypatch) -> None:
     _allow_research(monkeypatch)
     project = _project(db, app_settings)
     _map(db, project.id, "note")
@@ -553,9 +533,7 @@ def test_research_without_a_channel_project_passes_none(db, app_settings, monkey
     assert captured["project_id"] is None
 
 
-def test_research_truncates_long_reports_and_links_the_dashboard(
-    db, app_settings, monkeypatch, make_settings
-) -> None:
+def test_research_truncates_long_reports_and_links_the_dashboard(db, app_settings, monkeypatch, make_settings) -> None:
     from types import SimpleNamespace
 
     _allow_research(monkeypatch)

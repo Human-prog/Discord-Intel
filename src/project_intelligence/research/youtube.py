@@ -114,6 +114,7 @@ class YouTubeFetcher:
         # Build content hash
         content_for_hash = f"{title}|{description}|{transcript_text or ''}"
         import hashlib
+
         content_hash = hashlib.sha256(content_for_hash.encode()).hexdigest()
 
         return YouTubeVideo(
@@ -156,6 +157,7 @@ class YouTubeFetcher:
 
             # Extract metadata from ytInitialData JSON embedded in page
             import json
+
             match = re.search(r"var ytInitialData = ({.*?});", html)
             if match:
                 try:

@@ -353,9 +353,7 @@ async def api_login(
 
     if not session_auth.verify_owner_secret(payload.token.strip(), settings):
         _record_failed_login(client)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid dashboard token"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid dashboard token")
 
     token, expires = session_auth.issue_session_token(settings)
     response.set_cookie(
@@ -420,8 +418,7 @@ async def api_health(settings: Settings = Depends(get_settings)) -> DashboardHea
         dashboard_bound_port=settings.dashboard_bind_port,
         ollama_configured=settings.ollama_model is not None,
         research_configured=(
-            settings.research_provider in {"tavily", "brave"}
-            and settings.research_api_key is not None
+            settings.research_provider in {"tavily", "brave"} and settings.research_api_key is not None
         ),
         uptime_seconds=round(time.monotonic() - _STARTED_AT, 3),
     )
@@ -463,9 +460,7 @@ async def api_project_list(
                 description=project.description,
                 allowed_root=project.allowed_root,
                 status=_health_status(snapshot[0] if snapshot else None),
-                last_checked=snapshot[1]
-                if snapshot
-                else (project.last_activity_utc or project.updated_at_utc),
+                last_checked=snapshot[1] if snapshot else (project.last_activity_utc or project.updated_at_utc),
                 catalog_status=project.catalog_status,
                 category=project.category,
                 priority=project.priority,

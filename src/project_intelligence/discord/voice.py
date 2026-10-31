@@ -20,18 +20,21 @@ from discord import app_commands
 
 try:
     from project_intelligence.discord.voice_speech import VoiceInteraction
+
     VOICE_SPEECH_AVAILABLE = True
 except ImportError:
     VOICE_SPEECH_AVAILABLE = False
 
 try:
     from project_intelligence.discord.image_gen import get_image_generator
+
     IMAGE_GEN_AVAILABLE = True
 except ImportError:
     IMAGE_GEN_AVAILABLE = False
 
 try:
     from project_intelligence.discord.vision import get_vision_engine
+
     VISION_AVAILABLE = True
 except ImportError:
     VISION_AVAILABLE = False
@@ -288,7 +291,7 @@ async def voice_listen_command(interaction: Any, duration: int = 30) -> None:
         f"🎤 Listening for {duration}s...\n"
         f"STT (Whisper): {'READY' if VOICE_SPEECH_AVAILABLE else 'PENDING — install whisper package'}\n"
         f"TTS (pyttsx3): {'READY' if VOICE_SPEECH_AVAILABLE else 'PENDING — install pyttsx3 package'}\n"
-        "Capturing audio... When done: transcribe → understand → reply."
+        "Capturing audio... When done: transcribe → understand → reply.",
     )
 
     # Simulate listening
@@ -317,7 +320,7 @@ async def voice_stop_command(interaction: Any) -> None:
         interaction,
         "🛑 Stopped listening. (STT/TTS: "
         + ("READY" if VOICE_SPEECH_AVAILABLE else "PENDING — install whisper + pyttsx3")
-        + ")"
+        + ")",
     )
 
 
@@ -436,6 +439,7 @@ def register_voice_commands(bot: discord.Client) -> None:
                 await voice_manager.play_audio(guild.id, audio_path)
                 # Clean up temp file (optional)
                 import os
+
                 os.remove(audio_path)
                 await _reply(interaction, "🎧 Response played (audio file).")
             else:
@@ -465,6 +469,7 @@ def register_voice_commands(bot: discord.Client) -> None:
             await _reply(interaction, exc.message)
             return
         import httpx
+
         try:
             resp = httpx.get(image_url, timeout=15.0)
             resp.raise_for_status()

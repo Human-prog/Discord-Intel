@@ -313,16 +313,13 @@ def provider_from_settings(settings: Settings) -> SearchProvider:
     name = (settings.research_provider or "").strip().lower()
     if not name or name == "none":
         raise ResearchNotConfigured(
-            "Web research is not configured. Set RESEARCH_PROVIDER to tavily or brave "
-            "and provide RESEARCH_API_KEY."
+            "Web research is not configured. Set RESEARCH_PROVIDER to tavily or brave and provide RESEARCH_API_KEY."
         )
     if name == "tavily":
         return TavilyProvider(settings)
     if name == "brave":
         return BraveProvider(settings)
-    raise ResearchNotConfigured(
-        "Unknown RESEARCH_PROVIDER. Supported values are: tavily, brave, none."
-    )
+    raise ResearchNotConfigured("Unknown RESEARCH_PROVIDER. Supported values are: tavily, brave, none.")
 
 
 # ---------------------------------------------------------------------------
@@ -391,23 +388,15 @@ class SafeFetcher:
                         continue
                     if response.status_code >= 400:
                         raise ResearchError(f"Source returned HTTP {response.status_code}")
-                    content_type = (
-                        response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
-                    )
-                    if not any(
-                        content_type.startswith(allowed) for allowed in _ALLOWED_CONTENT_TYPES
-                    ):
-                        raise ResearchError(
-                            f"Unsupported content type: {content_type or 'unknown'}"
-                        )
+                    content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                    if not any(content_type.startswith(allowed) for allowed in _ALLOWED_CONTENT_TYPES):
+                        raise ResearchError(f"Unsupported content type: {content_type or 'unknown'}")
                     chunks: list[bytes] = []
                     total = 0
                     for chunk in response.iter_bytes():
                         total += len(chunk)
                         if total > self.settings.research_max_response_bytes:
-                            raise ResearchError(
-                                "Source exceeded the configured response size limit"
-                            )
+                            raise ResearchError("Source exceeded the configured response size limit")
                         chunks.append(chunk)
                     raw = b"".join(chunks)
                     break

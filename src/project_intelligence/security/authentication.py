@@ -101,6 +101,5 @@ def require_authentication(auth_ctx: AuthContext, *, settings: Settings) -> None
         return
 
     raise AuthError(
-        "Authorization failed: this operation requires owner privileges; "
-        "your user ID is not in the owner allowlist."
+        "Authorization failed: this operation requires owner privileges; your user ID is not in the owner allowlist."
     )

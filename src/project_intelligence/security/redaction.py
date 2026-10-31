@@ -106,14 +106,10 @@ _TOKEN_URL_RE = re.compile(r"(https?://[^\s]+)", re.IGNORECASE)
 _OPENAI_KEY_RE = re.compile(r"sk-[A-Za-z0-9]{48}")
 
 # Match general cloud API key shapes (long alphanumeric strings after a label)
-_CLOUD_API_KEY_RE = re.compile(
-    r"(?i)(aws|gcp|azure|openai|anthropic)_key\s*=\s*['\"][^'\"]{16,}['\"]"
-)
+_CLOUD_API_KEY_RE = re.compile(r"(?i)(aws|gcp|azure|openai|anthropic)_key\s*=\s*['\"][^'\"]{16,}['\"]")
 
 # Match private IP addresses or loopback that might appear in research URLs
-_PRIVATE_IP_RE = re.compile(
-    r"(?:127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})"
-)
+_PRIVATE_IP_RE = re.compile(r"(?:127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})")
 
 # Match key: value patterns (colon-separated secrets, e.g. "secret: abc123")
 _COLON_SECRET_RE = re.compile(r"(?i)(?:secret|key|token|api_key)\s*:\s*([^\s]+)", re.IGNORECASE)

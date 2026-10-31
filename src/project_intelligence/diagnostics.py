@@ -114,11 +114,7 @@ def format_summary(summary: dict[str, Any]) -> str:
             f"mode {github['mode']}, allowed repos {github['allowed_repositories']}, "
             f"token {github['read_only_token']}"
         ),
-        (
-            "Ollama: "
-            f"{ollama['base_url']} (loopback), model {ollama['model']}, "
-            f"timeout {ollama['timeout_seconds']}s"
-        ),
+        (f"Ollama: {ollama['base_url']} (loopback), model {ollama['model']}, timeout {ollama['timeout_seconds']}s"),
         (
             "Research: "
             f"provider {research['provider']}, api key {research['api_key']}, "
@@ -176,23 +172,15 @@ def check_runtime_prerequisites(settings: Settings) -> list[tuple[str, str]]:
         if key_file is None or not Path(key_file).exists():
             checks.append(("error", f"GitHub App private key file not found: {key_file}"))
 
-    if (
-        settings.dashboard_session_secret_file is not None
-        and not Path(settings.dashboard_session_secret_file).exists()
-    ):
+    if settings.dashboard_session_secret_file is not None and not Path(settings.dashboard_session_secret_file).exists():
         checks.append(
             (
                 "error",
-                "dashboard session secret file not found: "
-                f"{settings.dashboard_session_secret_file}",
+                f"dashboard session secret file not found: {settings.dashboard_session_secret_file}",
             )
         )
 
-    if (
-        settings.opencode_enabled
-        and settings.opencode_command
-        and shutil.which(settings.opencode_command) is None
-    ):
+    if settings.opencode_enabled and settings.opencode_command and shutil.which(settings.opencode_command) is None:
         checks.append(
             (
                 "error",

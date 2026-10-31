@@ -84,9 +84,7 @@ def test_project_upsert_updates_in_place(db) -> None:
 
 def test_project_sources_roundtrip(db) -> None:
     project = _project(db)
-    source = repo.upsert_project_source(
-        db, project.id, "github", "owner/repo", "https://github.com/owner/repo"
-    )
+    source = repo.upsert_project_source(db, project.id, "github", "owner/repo", "https://github.com/owner/repo")
     assert source.project_id == project.id
     assert source.source_type == "github"
 
@@ -133,9 +131,7 @@ def test_notes_roundtrip(db) -> None:
 def test_milestone_upsert_is_idempotent(db) -> None:
     project = _project(db)
     first = repo.upsert_milestone(db, project.id, "Ship", "first", "open", None)
-    second = repo.upsert_milestone(
-        db, project.id, "Ship", "second", "in_progress", "2026-01-01T00:00:00Z"
-    )
+    second = repo.upsert_milestone(db, project.id, "Ship", "second", "in_progress", "2026-01-01T00:00:00Z")
     assert second.id == first.id
     assert second.description == "second"
     assert second.status == "in_progress"
@@ -194,9 +190,7 @@ def test_research_job_and_sources_roundtrip(db) -> None:
     assert job.status == "pending"
     assert job.question == "What next?"
 
-    source = repo.upsert_research_source(
-        db, job.id, "Docs", "https://docs.example", "web", "c" * 64
-    )
+    source = repo.upsert_research_source(db, job.id, "Docs", "https://docs.example", "web", "c" * 64)
     assert source.research_job_id == job.id
     assert source.content_hash == "c" * 64
 

@@ -214,9 +214,7 @@ class ProjectDetail(BaseModel):
     milestone_count: int = Field(ge=0)
     evidence_count: int = Field(ge=0)
     discord_mappings: int = Field(ge=0, description="Number of registered Discord mappings")
-    health_freshness: str = Field(
-        description="How recent the health snapshot is; one of 'fresh','stale','unknown'"
-    )
+    health_freshness: str = Field(description="How recent the health snapshot is; one of 'fresh','stale','unknown'")
     catalog_status: str | None = None
     category: str | None = None
     priority: str | None = None

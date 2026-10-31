@@ -29,9 +29,7 @@ def _ensure_conn(settings: Settings) -> sqlite3.Connection:
     global _CONN, _CONN_PATH
 
     with _LOCK:
-        db_path = (
-            Path(settings.database_path) if settings.database_path else Path("data/db.sqlite3")
-        )
+        db_path = Path(settings.database_path) if settings.database_path else Path("data/db.sqlite3")
         if _CONN is not None and db_path == _CONN_PATH:
             return _CONN
 

@@ -69,9 +69,7 @@ class _FakeResponse:
 
 
 class _FakeClient:
-    def __init__(
-        self, *, status_code: int = 200, payload: dict | None = None, raises: bool = False
-    ):
+    def __init__(self, *, status_code: int = 200, payload: dict | None = None, raises: bool = False):
         self._status = status_code
         self._payload = payload or {}
         self._raises = raises
@@ -218,9 +216,7 @@ def test_mock_adapter_returns_registered_metadata(make_settings, tmp_path) -> No
     assert adapter.get_session_metadata("missing") is None
     assert adapter.get_project_metadata("p1") == {"id": "p1", "name": "Project"}
     assert adapter.list_sessions() == [{"id": "s1", "project_id": "p1", "title": "Session"}]
-    assert adapter.list_sessions(project_id="p1") == [
-        {"id": "s1", "project_id": "p1", "title": "Session"}
-    ]
+    assert adapter.list_sessions(project_id="p1") == [{"id": "s1", "project_id": "p1", "title": "Session"}]
     assert adapter.list_sessions(project_id="other") == []
 
 

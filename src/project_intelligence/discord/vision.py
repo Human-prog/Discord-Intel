@@ -24,10 +24,12 @@ class VisionEngine:
             return True
         try:
             from project_intelligence.config import load_settings
+
             settings = load_settings()
             self._base_url = settings.ollama_base_url
             self._timeout = settings.ollama_timeout_second
             import httpx
+
             self._httpx = httpx
             self._available = True
             logger.info("Vision engine ready (model: %s)", self.model)

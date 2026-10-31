@@ -120,27 +120,19 @@ class RateLimiter:
 
     def check_command_per_user(self, user_id: int) -> tuple[bool, float]:
         """Check the per-user command limit.  Returns ``(limited, reset)``."""
-        return self.is_rate_limited(
-            ("command:user", user_id), *DEFAULT_RATE_LIMITS["command_per_user"]
-        )
+        return self.is_rate_limited(("command:user", user_id), *DEFAULT_RATE_LIMITS["command_per_user"])
 
     def check_command_per_guild(self, guild_id: int) -> tuple[bool, float]:
         """Check the per-guild command limit.  Returns ``(limited, reset)``."""
-        return self.is_rate_limited(
-            ("command:guild", guild_id), *DEFAULT_RATE_LIMITS["command_per_guild"]
-        )
+        return self.is_rate_limited(("command:guild", guild_id), *DEFAULT_RATE_LIMITS["command_per_guild"])
 
     def check_command_per_channel(self, channel_id: int) -> tuple[bool, float]:
         """Check the per-channel command limit.  Returns ``(limited, reset)``."""
-        return self.is_rate_limited(
-            ("command:channel", channel_id), *DEFAULT_RATE_LIMITS["command_per_channel"]
-        )
+        return self.is_rate_limited(("command:channel", channel_id), *DEFAULT_RATE_LIMITS["command_per_channel"])
 
     def check_research_per_user(self, user_id: int) -> tuple[bool, float]:
         """Check the per-user research-job limit.  Returns ``(limited, reset)``."""
-        return self.is_rate_limited(
-            ("research:user", user_id), *DEFAULT_RATE_LIMITS["research_per_user"]
-        )
+        return self.is_rate_limited(("research:user", user_id), *DEFAULT_RATE_LIMITS["research_per_user"])
 
     def check_health_per_hour(self) -> tuple[bool, float]:
         """Check the global health-check limit.  Returns ``(limited, reset)``."""

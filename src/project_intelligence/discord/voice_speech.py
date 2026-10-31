@@ -30,6 +30,7 @@ class SttEngine:
             return self._available
         try:
             import whisper  # type: ignore[import-untyped]
+
             self._model = whisper.load_model(self.model_name)
             self._available = True
             logger.info("Whisper %s loaded for STT", self.model_name)
@@ -71,6 +72,7 @@ class TtsEngine:
             return self._available
         try:
             import pyttsx3
+
             self._engine = pyttsx3.init()
             voices = self._engine.getProperty("voices")
             # Pick first available voice
@@ -109,6 +111,7 @@ class VoiceInteraction:
 
     def __init__(self, settings: object | None = None) -> None:
         from project_intelligence.config import load_settings
+
         self.settings = settings or load_settings()
         self.stt = SttEngine(model_name="base")
         self.tts = TtsEngine()

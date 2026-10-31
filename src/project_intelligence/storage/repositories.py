@@ -118,9 +118,7 @@ def _project_from_row(row: sqlite3.Row | tuple[object, ...]) -> Project:
     )
 
 
-def upsert_project(
-    conn: sqlite3.Connection, name: str, description: str | None, allowed_root: str
-) -> Project:
+def upsert_project(conn: sqlite3.Connection, name: str, description: str | None, allowed_root: str) -> Project:
     row = conn.execute(
         f"""
         INSERT INTO projects (name, description, allowed_root, created_at_utc, updated_at_utc)
@@ -485,29 +483,23 @@ def get_mapping(
     )
 
 
-def get_mapped_project_id(
-    conn: sqlite3.Connection, guild_id: int, channel_id: int, command_name: str
-) -> int | None:
+def get_mapped_project_id(conn: sqlite3.Connection, guild_id: int, channel_id: int, command_name: str) -> int | None:
     """Resolve the project mapped to a guild/channel/command, if any."""
     row = conn.execute(
-        "SELECT project_id FROM discord_mappings "
-        "WHERE guild_id = ? AND channel_id = ? AND command_name = ?",
+        "SELECT project_id FROM discord_mappings WHERE guild_id = ? AND channel_id = ? AND command_name = ?",
         (guild_id, channel_id, command_name),
     ).fetchone()
     return int(row[0]) if row is not None else None
 
 
-def get_any_mapped_project_id(
-    conn: sqlite3.Connection, guild_id: int, channel_id: int
-) -> int | None:
+def get_any_mapped_project_id(conn: sqlite3.Connection, guild_id: int, channel_id: int) -> int | None:
     """Resolve any project mapped to this guild/channel.
 
     Used by commands such as ``/research`` that may not have their own mapping
     yet but should still operate in the context of the channel's project.
     """
     row = conn.execute(
-        "SELECT project_id FROM discord_mappings "
-        "WHERE guild_id = ? AND channel_id = ? ORDER BY id LIMIT 1",
+        "SELECT project_id FROM discord_mappings WHERE guild_id = ? AND channel_id = ? ORDER BY id LIMIT 1",
         (guild_id, channel_id),
     ).fetchone()
     return int(row[0]) if row is not None else None
@@ -540,9 +532,7 @@ def list_mappings_for_project(conn: sqlite3.Connection, project_id: int) -> list
 class AuthorizedUser:
     __slots__ = ("discord_user_id", "granted_at_utc", "id", "project_id", "role")
 
-    def __init__(
-        self, id: int, discord_user_id: int, project_id: int | None, role: str, granted_at_utc: str
-    ) -> None:
+    def __init__(self, id: int, discord_user_id: int, project_id: int | None, role: str, granted_at_utc: str) -> None:
         self.id = id
         self.discord_user_id = discord_user_id
         self.project_id = project_id
@@ -566,14 +556,10 @@ def upsert_authorized_user(
     ).fetchone()
     if row is None:
         raise ValueError("AuthorizedUser upsert returned no row")
-    return AuthorizedUser(
-        id=row[0], discord_user_id=row[1], project_id=row[2], role=row[3], granted_at_utc=row[4]
-    )
+    return AuthorizedUser(id=row[0], discord_user_id=row[1], project_id=row[2], role=row[3], granted_at_utc=row[4])
 
 
-def get_authorized_user(
-    conn: sqlite3.Connection, discord_user_id: int, project_id: int
-) -> AuthorizedUser | None:
+def get_authorized_user(conn: sqlite3.Connection, discord_user_id: int, project_id: int) -> AuthorizedUser | None:
     row = conn.execute(
         "SELECT id, discord_user_id, project_id, role, granted_at_utc FROM authorized_users "
         "WHERE discord_user_id = ? AND project_id = ?",
@@ -581,24 +567,17 @@ def get_authorized_user(
     ).fetchone()
     if row is None:
         return None
-    return AuthorizedUser(
-        id=row[0], discord_user_id=row[1], project_id=row[2], role=row[3], granted_at_utc=row[4]
-    )
+    return AuthorizedUser(id=row[0], discord_user_id=row[1], project_id=row[2], role=row[3], granted_at_utc=row[4])
 
 
-def list_authorized_users_for_project(
-    conn: sqlite3.Connection, project_id: int
-) -> list[AuthorizedUser]:
+def list_authorized_users_for_project(conn: sqlite3.Connection, project_id: int) -> list[AuthorizedUser]:
     rows = conn.execute(
         "SELECT id, discord_user_id, project_id, role, granted_at_utc FROM authorized_users "
         "WHERE project_id = ? ORDER BY discord_user_id",
         (project_id,),
     ).fetchall()
     return [
-        AuthorizedUser(
-            id=r[0], discord_user_id=r[1], project_id=r[2], role=r[3], granted_at_utc=r[4]
-        )
-        for r in rows
+        AuthorizedUser(id=r[0], discord_user_id=r[1], project_id=r[2], role=r[3], granted_at_utc=r[4]) for r in rows
     ]
 
 
@@ -634,9 +613,7 @@ class Note:
         self.updated_at_utc = updated_at_utc
 
 
-def upsert_note(
-    conn: sqlite3.Connection, project_id: int, discord_user_id: int | None, content: str
-) -> Note:
+def upsert_note(conn: sqlite3.Connection, project_id: int, discord_user_id: int | None, content: str) -> Note:
     row = conn.execute(
         """
         INSERT INTO notes (project_id, discord_user_id, content, created_at_utc, updated_at_utc)
@@ -984,9 +961,7 @@ def upsert_repository_snapshot(
     )
 
 
-def list_snapshots_for_project(
-    conn: sqlite3.Connection, project_id: int
-) -> list[RepositorySnapshot]:
+def list_snapshots_for_project(conn: sqlite3.Connection, project_id: int) -> list[RepositorySnapshot]:
     rows = conn.execute(
         "SELECT id, project_id, git_commit_hash, git_branch, snapshot_time_utc, file_state_hash, status, notes "
         "FROM repository_snapshots WHERE project_id = ? ORDER BY snapshot_time_utc DESC",
@@ -1128,9 +1103,7 @@ def upsert_work_item(
     return _work_item_from_row(row)
 
 
-def list_work_items_for_project(
-    conn: sqlite3.Connection, project_id: int, *, limit: int = 100
-) -> list[WorkItem]:
+def list_work_items_for_project(conn: sqlite3.Connection, project_id: int, *, limit: int = 100) -> list[WorkItem]:
     rows = conn.execute(
         f"SELECT {_WORK_ITEM_COLUMNS} FROM work_items WHERE project_id = ? "
         "ORDER BY COALESCE(occurred_at_utc, created_at_utc) DESC, id DESC LIMIT ?",
@@ -1435,8 +1408,7 @@ def get_research_job(conn: sqlite3.Connection, job_id: int) -> ResearchJob | Non
 
 def list_research_jobs_for_project(conn: sqlite3.Connection, project_id: int) -> list[ResearchJob]:
     rows = conn.execute(
-        f"SELECT {_RESEARCH_JOB_COLUMNS} FROM research_jobs "
-        "WHERE project_id = ? ORDER BY started_at_utc DESC",
+        f"SELECT {_RESEARCH_JOB_COLUMNS} FROM research_jobs WHERE project_id = ? ORDER BY started_at_utc DESC",
         (project_id,),
     ).fetchall()
     return [_research_job_from_row(r) for r in rows]
@@ -1444,8 +1416,7 @@ def list_research_jobs_for_project(conn: sqlite3.Connection, project_id: int) ->
 
 def list_recent_research_jobs(conn: sqlite3.Connection, *, limit: int = 20) -> list[ResearchJob]:
     rows = conn.execute(
-        f"SELECT {_RESEARCH_JOB_COLUMNS} FROM research_jobs "
-        "ORDER BY started_at_utc DESC, id DESC LIMIT ?",
+        f"SELECT {_RESEARCH_JOB_COLUMNS} FROM research_jobs ORDER BY started_at_utc DESC, id DESC LIMIT ?",
         (max(1, min(limit, 100)),),
     ).fetchall()
     return [_research_job_from_row(r) for r in rows]

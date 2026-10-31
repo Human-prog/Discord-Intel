@@ -93,9 +93,7 @@ class AuthorizationChecker:
         reaches the bot.
         """
         if self._auth.discord_guild_id is None:
-            raise AuthorizationError(
-                "Cannot operate outside a guild (DM detected). This command is guild-only."
-            )
+            raise AuthorizationError("Cannot operate outside a guild (DM detected). This command is guild-only.")
 
     # ------------------------------------------------------------------
     # Project authorization checks

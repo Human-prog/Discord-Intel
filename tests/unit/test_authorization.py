@@ -160,9 +160,7 @@ def test_mapping_is_scoped_to_guild_and_channel(db, app_settings) -> None:
     with pytest.raises(AuthorizationError):
         _checker(app_settings, _context(guild=OTHER_GUILD)).check_command_mapped(project.id, "next")
     with pytest.raises(AuthorizationError):
-        _checker(app_settings, _context(channel=OTHER_CHANNEL)).check_command_mapped(
-            project.id, "next"
-        )
+        _checker(app_settings, _context(channel=OTHER_CHANNEL)).check_command_mapped(project.id, "next")
 
 
 def test_project_and_command_requires_both(db, app_settings) -> None:

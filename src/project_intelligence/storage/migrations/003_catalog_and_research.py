@@ -41,9 +41,7 @@ def up(conn: Any) -> None:
     _add_column(conn, "projects", "monitored", "INTEGER NOT NULL DEFAULT 1")
     _add_column(conn, "projects", "metadata_json", "TEXT")
 
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS uq_projects_catalog_key ON projects(catalog_key)"
-    )
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_projects_catalog_key ON projects(catalog_key)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_projects_source ON projects(source)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_projects_priority ON projects(priority)")
 
@@ -67,13 +65,10 @@ def up(conn: Any) -> None:
         """
     )
     conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS uq_work_items_external "
-        "ON work_items(project_id, source, external_id)"
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_work_items_external ON work_items(project_id, source, external_id)"
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_work_items_project ON work_items(project_id)")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_work_items_occurred ON work_items(occurred_at_utc)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_work_items_occurred ON work_items(occurred_at_utc)")
 
     # ---- catalog imports -------------------------------------------------
     conn.execute(
@@ -95,26 +90,16 @@ def up(conn: Any) -> None:
     _add_column(conn, "research_jobs", "scope", "TEXT NOT NULL DEFAULT 'web'")
     _add_column(conn, "research_jobs", "provider", "TEXT")
     _add_column(conn, "research_jobs", "error_text", "TEXT")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_research_jobs_started ON research_jobs(started_at_utc)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_research_jobs_started ON research_jobs(started_at_utc)")
 
     # ---- research sources: citation text and local references -----------
     _add_column(conn, "research_sources", "snippet", "TEXT")
     _add_column(conn, "research_sources", "relevance_score", "REAL NOT NULL DEFAULT 0.0")
     _add_column(conn, "research_sources", "source_ref", "TEXT")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_research_sources_job ON research_sources(research_job_id)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_research_sources_job ON research_sources(research_job_id)")
 
     # ---- research reports: one report per job ---------------------------
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS uq_research_reports_job "
-        "ON research_reports(research_job_id)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_research_reports_generated "
-        "ON research_reports(generated_at_utc)"
-    )
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_research_reports_job ON research_reports(research_job_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_research_reports_generated ON research_reports(generated_at_utc)")
 
     conn.execute("COMMIT")

@@ -93,9 +93,7 @@ def cleanup_old_backups(backup_dir: Path, retention_days: int) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Consistent SQLite backup")
     parser.add_argument("--output", type=Path, default=None, help="Backup directory")
-    parser.add_argument(
-        "--retention", type=int, default=DEFAULT_RETENTION_DAYS, help="Retention days"
-    )
+    parser.add_argument("--retention", type=int, default=DEFAULT_RETENTION_DAYS, help="Retention days")
     args = parser.parse_args()
 
     db_path = get_db_path()

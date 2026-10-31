@@ -109,20 +109,14 @@ def _dict(value: object, field: str) -> dict[str, Any]:
 def _validate_project(raw: object, index: int) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise CatalogError(f"projects[{index}] must be an object")
-    catalog_key = _require_str(
-        raw.get("catalog_key"), f"projects[{index}].catalog_key", max_length=64
-    )
+    catalog_key = _require_str(raw.get("catalog_key"), f"projects[{index}].catalog_key", max_length=64)
     if not _HEX64_RE.match(catalog_key):
         raise CatalogError(f"projects[{index}].catalog_key must be a lowercase SHA-256 hex digest")
     name = _require_str(raw.get("name"), f"projects[{index}].name", max_length=200)
-    local_path = _require_str(
-        raw.get("local_path"), f"projects[{index}].local_path", max_length=1000
-    )
+    local_path = _require_str(raw.get("local_path"), f"projects[{index}].local_path", max_length=1000)
     if not _is_absolute_path(local_path):
         raise CatalogError(f"projects[{index}].local_path must be absolute")
-    description = _optional_str(
-        raw.get("description"), f"projects[{index}].description", max_length=4000
-    )
+    description = _optional_str(raw.get("description"), f"projects[{index}].description", max_length=4000)
     repo_url = _optional_str(raw.get("repo_url"), f"projects[{index}].repo_url", max_length=1000)
     if repo_url is not None and not repo_url.startswith(("https://", "http://")):
         raise CatalogError(f"projects[{index}].repo_url must be an HTTP(S) URL")
@@ -141,9 +135,7 @@ def _validate_project(raw: object, index: int) -> dict[str, Any]:
         max_length=80,
     )
     metadata = _dict(raw.get("metadata"), f"projects[{index}].metadata")
-    relative_path = _optional_str(
-        raw.get("relative_path"), f"projects[{index}].relative_path", max_length=1000
-    )
+    relative_path = _optional_str(raw.get("relative_path"), f"projects[{index}].relative_path", max_length=1000)
     markers = _string_list(
         raw.get("markers"),
         f"projects[{index}].markers",
@@ -229,9 +221,7 @@ def load_catalog(path: Path) -> dict[str, Any]:
     try:
         raw_bytes = path.read_bytes()
     except OSError as exc:
-        raise CatalogError(
-            f"could not read catalog: {exc.strerror or type(exc).__name__}"
-        ) from None
+        raise CatalogError(f"could not read catalog: {exc.strerror or type(exc).__name__}") from None
     try:
         data = json.loads(raw_bytes.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -316,9 +306,7 @@ def import_catalog(catalog: dict[str, Any], *, dry_run: bool = False) -> dict[st
                     source=item["source"],
                     external_id=item["external_id"],
                     occurred_at_utc=item["occurred_at_utc"],
-                    metadata_json=json.dumps(item["metadata"], ensure_ascii=False)
-                    if item["metadata"]
-                    else None,
+                    metadata_json=json.dumps(item["metadata"], ensure_ascii=False) if item["metadata"] else None,
                 )
                 work_item_count += 1
         repo.record_catalog_import(
@@ -360,10 +348,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     verb = "validated" if args.dry_run else "imported"
-    print(
-        f"{verb} {counts['projects']} projects and {counts['work_items']} work items "
-        f"from {args.catalog}"
-    )
+    print(f"{verb} {counts['projects']} projects and {counts['work_items']} work items from {args.catalog}")
     return 0
 
 

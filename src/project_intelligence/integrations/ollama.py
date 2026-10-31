@@ -140,9 +140,7 @@ class ModelAdapter:
 
     def recommend(self, context: str) -> str | None:
         """Generate recommendations from context."""
-        prompt = (
-            f"Based on the following context, suggest next steps:\n\n{context}\n\nRecommendations:"
-        )
+        prompt = f"Based on the following context, suggest next steps:\n\n{context}\n\nRecommendations:"
         return self.client.generate(prompt, max_tokens=512, temperature=0.5)
 
 

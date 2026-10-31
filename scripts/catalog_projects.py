@@ -296,16 +296,11 @@ def _detect_markers(path: Path) -> list[str]:
         # a directory as a project when it has no manifest.  Empty folders and
         # bare documentation folders stay out of the catalog.
         has_readme = any(
-            (path / name).is_file()
-            for name in ("README", "README.md", "README.rst", "README.txt", "readme.md")
+            (path / name).is_file() for name in ("README", "README.md", "README.rst", "README.txt", "readme.md")
         )
         if has_readme:
             try:
-                subdirs = [
-                    child
-                    for child in path.iterdir()
-                    if child.is_dir() and child.name not in IGNORED_DIRS
-                ]
+                subdirs = [child for child in path.iterdir() if child.is_dir() and child.name not in IGNORED_DIRS]
                 source_files = [
                     child
                     for child in path.iterdir()
@@ -503,9 +498,7 @@ def _status_for(last_activity: datetime | None) -> str:
     return "dormant"
 
 
-def _git_info(
-    path: Path, max_commits: int
-) -> tuple[dict[str, object], list[dict[str, object]], datetime | None]:
+def _git_info(path: Path, max_commits: int) -> tuple[dict[str, object], list[dict[str, object]], datetime | None]:
     inside = _run_git(path, ["rev-parse", "--is-inside-work-tree"])
     if inside != "true":
         return {}, [], None
@@ -671,11 +664,7 @@ def build_catalog(root: Path, max_commits: int) -> dict[str, object]:
         file_last_activity = _latest_mtime(real)
         last_activity = git_last_activity
         if file_last_activity is not None:
-            last_activity = (
-                file_last_activity
-                if last_activity is None
-                else max(last_activity, file_last_activity)
-            )
+            last_activity = file_last_activity if last_activity is None else max(last_activity, file_last_activity)
         catalog_key = hashlib.sha256(os.path.normcase(str(real)).encode("utf-8")).hexdigest()
         record = ProjectRecord(
             catalog_key=catalog_key,
@@ -771,13 +760,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"scanning {root}", file=sys.stderr)
     catalog = build_catalog(root, args.max_commits)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(
-        json.dumps(catalog, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
-    print(
-        f"wrote {catalog['project_count']} projects and "
-        f"{catalog['work_item_count']} work items to {args.output}"
-    )
+    args.output.write_text(json.dumps(catalog, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"wrote {catalog['project_count']} projects and {catalog['work_item_count']} work items to {args.output}")
     return 0
 
 

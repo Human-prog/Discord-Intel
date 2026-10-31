@@ -73,9 +73,7 @@ def up(conn: Any) -> None:
         )
         """
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_projectsources_project ON project_sources(project_id)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_projectsources_project ON project_sources(project_id)")
 
     # ---- discord_mappings ------------------------------------------------
     conn.execute(
@@ -108,9 +106,7 @@ def up(conn: Any) -> None:
         )
         """
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_authorized_user ON authorized_users(discord_user_id)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_authorized_user ON authorized_users(discord_user_id)")
 
     # ---- notes -----------------------------------------------------------
     conn.execute(
@@ -187,9 +183,7 @@ def up(conn: Any) -> None:
         )
         """
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_reposnapshot_project ON repository_snapshots(project_id)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_reposnapshot_project ON repository_snapshots(project_id)")
 
     # ---- research_jobs ---------------------------------------------------
     conn.execute(
@@ -226,9 +220,7 @@ def up(conn: Any) -> None:
         )
         """
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_resources_job ON research_sources(research_job_id)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_resources_job ON research_sources(research_job_id)")
 
     # ---- research_reports ------------------------------------------------
     conn.execute(
@@ -264,9 +256,7 @@ def up(conn: Any) -> None:
         )
         """
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_next ON scheduled_jobs(next_run_utc)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_next ON scheduled_jobs(next_run_utc)")
 
     # ---- health_snapshots ------------------------------------------------
     conn.execute(
@@ -323,9 +313,7 @@ def up(conn: Any) -> None:
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_events(timestamp_utc)")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_events(actor_discord_user_id)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_events(actor_discord_user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_project ON audit_events(project_id)")
 
     conn.execute("COMMIT")

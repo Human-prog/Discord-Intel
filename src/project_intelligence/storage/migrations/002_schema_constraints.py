@@ -18,13 +18,10 @@ def up(conn: Any) -> None:
     statements = (
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_repository_snapshots_commit "
         "ON repository_snapshots(project_id, git_commit_hash)",
-        "CREATE UNIQUE INDEX IF NOT EXISTS uq_research_jobs_question "
-        "ON research_jobs(project_id, question)",
-        "CREATE UNIQUE INDEX IF NOT EXISTS uq_research_sources_title "
-        "ON research_sources(research_job_id, title)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_research_jobs_question ON research_jobs(project_id, question)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_research_sources_title ON research_sources(research_job_id, title)",
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_milestones_title ON milestones(project_id, title)",
-        "CREATE UNIQUE INDEX IF NOT EXISTS uq_evidence_source_title "
-        "ON evidence(project_id, source_id, title)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_evidence_source_title ON evidence(project_id, source_id, title)",
     )
     for statement in statements:
         conn.execute(statement)

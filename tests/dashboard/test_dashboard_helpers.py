@@ -69,9 +69,7 @@ def _request(correlation_id: str | None = "corr-1") -> SimpleNamespace:
 
 
 def test_authorization_errors_become_403() -> None:
-    response = asyncio.run(
-        dashboard._handle_authorization_error(_request(), AuthorizationError("denied"))
-    )
+    response = asyncio.run(dashboard._handle_authorization_error(_request(), AuthorizationError("denied")))
     assert response.status_code == 403
     body = json.loads(response.body)
     assert body["error"] == "forbidden"

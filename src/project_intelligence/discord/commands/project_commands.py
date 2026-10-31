@@ -131,9 +131,7 @@ if DISCORD_AVAILABLE:
             await _reply(interaction, exc.message)
             return
 
-        project_id = resolve_project_id(
-            auth_ctx.discord_guild_id, auth_ctx.discord_channel_id, "next"
-        )
+        project_id = resolve_project_id(auth_ctx.discord_guild_id, auth_ctx.discord_channel_id, "next")
         if project_id is None:
             await _reply(
                 interaction,
@@ -157,14 +155,11 @@ if DISCORD_AVAILABLE:
         checker = make_checker(auth_ctx, settings)
         try:
             checker.check_user_guild_channel()
-            project_id = resolve_project_id(
-                auth_ctx.discord_guild_id, auth_ctx.discord_channel_id, "roadmap"
-            )
+            project_id = resolve_project_id(auth_ctx.discord_guild_id, auth_ctx.discord_channel_id, "roadmap")
             if project_id is None:
                 await _reply(
                     interaction,
-                    "**Project Roadmap**\n\nNo project is mapped here. "
-                    "Use `/connect-project` first.",
+                    "**Project Roadmap**\n\nNo project is mapped here. Use `/connect-project` first.",
                 )
                 return
             checker.check_project_access(project_id)
@@ -202,9 +197,7 @@ if DISCORD_AVAILABLE:
             "Use `/note` to record a blocker so it appears in project activity.",
         )
 
-    @app_commands.command(
-        name="connect-project", description="Map an approved Discord context to a project"
-    )
+    @app_commands.command(name="connect-project", description="Map an approved Discord context to a project")
     async def connect_project_command(interaction: discord.Interaction, project_id: int) -> None:
         """Map an approved Discord context to a project (owner only)."""
         auth_ctx, settings = _context(interaction)
@@ -228,8 +221,7 @@ if DISCORD_AVAILABLE:
         if not root_is_allowed(project.allowed_root, settings):
             await _reply(
                 interaction,
-                "Refusing to connect: the project root is outside the configured "
-                "PROJECT_ALLOWED_ROOTS.",
+                "Refusing to connect: the project root is outside the configured PROJECT_ALLOWED_ROOTS.",
             )
             return
 
@@ -244,8 +236,7 @@ if DISCORD_AVAILABLE:
         conn.commit()
         await _reply(
             interaction,
-            f"Project {project_id} connected to this guild/channel for "
-            f"{len(MAPPED_COMMANDS)} commands.",
+            f"Project {project_id} connected to this guild/channel for {len(MAPPED_COMMANDS)} commands.",
         )
 
     @app_commands.command(
@@ -297,8 +288,7 @@ if DISCORD_AVAILABLE:
         if not root_is_allowed(str(resolved), settings):
             await _reply(
                 interaction,
-                "Refusing to create the project: the root is outside the configured "
-                "PROJECT_ALLOWED_ROOTS.",
+                "Refusing to create the project: the root is outside the configured PROJECT_ALLOWED_ROOTS.",
             )
             return
 
@@ -341,9 +331,7 @@ if DISCORD_AVAILABLE:
         checker = make_checker(auth_ctx, settings)
         try:
             checker.check_user_guild_channel()
-            project_id = resolve_project_id(
-                auth_ctx.discord_guild_id, auth_ctx.discord_channel_id, "note"
-            )
+            project_id = resolve_project_id(auth_ctx.discord_guild_id, auth_ctx.discord_channel_id, "note")
             if project_id is None:
                 await _reply(
                     interaction,
@@ -374,14 +362,11 @@ if DISCORD_AVAILABLE:
         checker = make_checker(auth_ctx, settings)
         try:
             checker.check_user_guild_channel()
-            project_id = resolve_project_id(
-                auth_ctx.discord_guild_id, auth_ctx.discord_channel_id, "health"
-            )
+            project_id = resolve_project_id(auth_ctx.discord_guild_id, auth_ctx.discord_channel_id, "health")
             if project_id is None:
                 await _reply(
                     interaction,
-                    "**Project Health**\n\nNo project is mapped here. "
-                    "Use `/connect-project` first.",
+                    "**Project Health**\n\nNo project is mapped here. Use `/connect-project` first.",
                 )
                 return
             checker.check_project_access(project_id)
@@ -460,11 +445,10 @@ if DISCORD_AVAILABLE:
         conn = get_conn()
         try:
             from project_intelligence.storage import repositories as repo
+
             job = repo.upsert_research_job(
                 conn,
-                project_id=resolve_project_id(
-                    auth_ctx.discord_guild_id, auth_ctx.discord_channel_id, "research"
-                ),
+                project_id=resolve_project_id(auth_ctx.discord_guild_id, auth_ctx.discord_channel_id, "research"),
                 user_id=auth_ctx.discord_user_id,
                 question=normalized_q,
                 scope=normalized_scope,
@@ -586,10 +570,7 @@ if DISCORD_AVAILABLE:
         truncated = len(body) > 1500
         if truncated:
             body = body[:1500].rstrip() + "\n…"
-        message = (
-            f"**Research #{result.job_id}** · {result.local_count} local · "
-            f"{result.web_count} web\n\n{body}"
-        )
+        message = f"**Research #{result.job_id}** · {result.local_count} local · {result.web_count} web\n\n{body}"
         if truncated:
             message += "\n\nFull report saved in the dashboard."
         public_url = (settings.dashboard_public_url or "").rstrip("/")

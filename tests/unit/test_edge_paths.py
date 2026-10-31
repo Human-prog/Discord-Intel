@@ -374,9 +374,7 @@ def test_root_check_survives_resolution_errors(app_settings, monkeypatch) -> Non
 
 
 def test_roadmap_denies_users_without_project_access(db, app_settings) -> None:
-    project = repo.upsert_project(
-        db, "Alpha", None, str(app_settings.project_allowed_roots[0] / "alpha")
-    )
+    project = repo.upsert_project(db, "Alpha", None, str(app_settings.project_allowed_roots[0] / "alpha"))
     repo.upsert_discord_mapping(db, project.id, GUILD_ID, CHANNEL_ID, "roadmap")
     interaction = FakeInteraction(app_settings, user_id=OTHER_USER_ID)
 
@@ -390,9 +388,7 @@ def test_roadmap_denies_users_without_project_access(db, app_settings) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_connection_is_reopened_when_the_database_path_changes(
-    app_settings, tmp_path: Path
-) -> None:
+def test_connection_is_reopened_when_the_database_path_changes(app_settings, tmp_path: Path) -> None:
     first = database._ensure_conn(app_settings)
     other_settings = app_settings.model_copy(update={"database_path": tmp_path / "other.sqlite3"})
     second = database._ensure_conn(other_settings)

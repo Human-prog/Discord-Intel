@@ -79,9 +79,7 @@ if DISCORD_AVAILABLE:
                     interaction_channel_id=channel_id,
                 )
             except AuthError as exc:
-                await interaction.response.send_message(
-                    f"Authentication failed: {exc.message}", ephemeral=True
-                )
+                await interaction.response.send_message(f"Authentication failed: {exc.message}", ephemeral=True)
                 return False
 
             interaction.extras = {"auth_ctx": auth_ctx}
@@ -132,9 +130,7 @@ if DISCORD_AVAILABLE:
 
         limited, reset = rate_limiter.check_command_per_user(auth_ctx.discord_user_id)
         if limited:
-            await interaction.response.send_message(
-                f"Rate limited. Try again in {int(reset)} seconds.", ephemeral=True
-            )
+            await interaction.response.send_message(f"Rate limited. Try again in {int(reset)} seconds.", ephemeral=True)
             return
 
         help_text = """**Discord Project Intelligence - Available Commands**
@@ -184,9 +180,7 @@ All replies are private (ephemeral) by default.
 
         limited, reset = rate_limiter.check_command_per_user(auth_ctx.discord_user_id)
         if limited:
-            await interaction.response.send_message(
-                f"Rate limited. Try again in {int(reset)} seconds.", ephemeral=True
-            )
+            await interaction.response.send_message(f"Rate limited. Try again in {int(reset)} seconds.", ephemeral=True)
             return
 
         per_user_calls, per_user_window = DEFAULT_RATE_LIMITS["command_per_user"]

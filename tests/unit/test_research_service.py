@@ -61,9 +61,7 @@ def test_strip_heading_and_combine_reports() -> None:
         "\n"
         "No sources were found.\n"
     )
-    combined = _combine_reports(
-        "q", "both", "tavily", "# Local research\nlocal body", "# Web research\nweb body", []
-    )
+    combined = _combine_reports("q", "both", "tavily", "# Local research\nlocal body", "# Web research\nweb body", [])
     assert "## Local knowledge\n\nlocal body" in combined
     assert "## Web sources\n\nweb body" in combined
 
@@ -97,10 +95,7 @@ def test_run_research_local_persists_job_report_and_sources(db, app_settings) ->
     assert report is not None
     assert report.citation_count == result.source_count
     assert len(repo.list_research_sources(db, result.job_id)) == result.source_count
-    assert (
-        run_research("discord", project_id=project.id, scope="local", settings=app_settings).status
-        == "completed"
-    )
+    assert run_research("discord", project_id=project.id, scope="local", settings=app_settings).status == "completed"
 
 
 def test_run_research_validates_inputs(db, app_settings) -> None:
@@ -220,9 +215,7 @@ def test_run_research_unexpected_error_marks_job_failed(db, app_settings, monkey
 
 def test_multiple_local_sources_use_plural_summary(db, app_settings) -> None:
     project = _seed_project(db)
-    result = run_research(
-        "discord research", project_id=project.id, scope="local", settings=app_settings
-    )
+    result = run_research("discord research", project_id=project.id, scope="local", settings=app_settings)
     assert result.source_count > 1
     job = repo.get_research_job(db, result.job_id)
     assert job is not None
@@ -231,12 +224,8 @@ def test_multiple_local_sources_use_plural_summary(db, app_settings) -> None:
 
 def test_research_history_scopes_and_limits(db, app_settings) -> None:
     project = _seed_project(db)
-    first = run_research(
-        "discord research", project_id=project.id, scope="local", settings=app_settings
-    )
-    second = run_research(
-        "discord research", project_id=project.id, scope="local", settings=app_settings
-    )
+    first = run_research("discord research", project_id=project.id, scope="local", settings=app_settings)
+    second = run_research("discord research", project_id=project.id, scope="local", settings=app_settings)
     global_job = repo.upsert_research_job(db, None, None, "global", scope="local")
     db.commit()
     recent = research_history(limit=100)

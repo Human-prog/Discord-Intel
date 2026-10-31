@@ -1,4 +1,5 @@
 """Notification delivery for research and health events (v1.2.0)."""
+
 from __future__ import annotations
 
 
