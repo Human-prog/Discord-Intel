@@ -7,11 +7,8 @@ All audio processing stays local (no cloud STT unless explicitly configured).
 
 from __future__ import annotations
 
-import io
 import logging
-import tempfile
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +41,7 @@ class SttEngine:
     def is_available(self) -> bool:
         return self._load()
 
-    def transcribe(self, audio_path: str) -> Optional[str]:
+    def transcribe(self, audio_path: str) -> str | None:
         """Transcribe an audio file to text."""
         if not self._load():
             return None
@@ -110,8 +107,8 @@ class TtsEngine:
 class VoiceInteraction:
     """End-to-end voice interaction: listen → STT → understand → respond."""
 
-    def __init__(self, settings: Optional[object] = None) -> None:
-        from project_intelligence.config import Settings, load_settings
+    def __init__(self, settings: object | None = None) -> None:
+        from project_intelligence.config import load_settings
         self.settings = settings or load_settings()
         self.stt = SttEngine(model_name="base")
         self.tts = TtsEngine()
@@ -123,10 +120,10 @@ class VoiceInteraction:
     def can_speak(self) -> bool:
         return self.tts.is_available()
 
-    def transcribe_file(self, audio_path: str) -> Optional[str]:
+    def transcribe_file(self, audio_path: str) -> str | None:
         return self.stt.transcribe(audio_path)
 
-    def speak_file(self, text: str, output_path: str = "/tmp/voice_response.wav") -> Optional[str]:
+    def speak_file(self, text: str, output_path: str = "/tmp/voice_response.wav") -> str | None:  # noqa: S108
         if not self.tts.speak_to_file(text, output_path):
             return None
         return output_path

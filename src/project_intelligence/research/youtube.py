@@ -11,14 +11,15 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
-from urllib.parse import parse_qs, urlparse
 
 import httpx
 
 from project_intelligence.config import Settings, load_settings
 from project_intelligence.research.research_pipeline import is_safe_url
-from project_intelligence.research.web_research import ResearchError, ResearchNotConfigured, WebFinding
-
+from project_intelligence.research.web_research import (
+    ResearchError,
+    WebFinding,
+)
 
 # YouTube URL patterns
 YOUTUBE_URL_PATTERNS = [
@@ -218,7 +219,7 @@ class YouTubeFetcher:
                         "published_at": None,  # Not easily accessible in this structure
                         "description": description,
                     }
-        except Exception:
+        except Exception:  # noqa: S110
             pass
         return None
 
@@ -264,7 +265,7 @@ class YouTubeFetcher:
             if not xml_content.strip():
                 return None, None
 
-            root = ET.fromstring(xml_content)
+            root = ET.fromstring(xml_content)  # noqa: S314
             transcript_parts = []
             lang_code = root.get("lang_code", "en")
 
@@ -353,7 +354,7 @@ def research_youtube(
             "# YouTube research",
             "",
             f"**Question:** {question}",
-            f"**Source type:** YouTube videos",
+            "**Source type:** YouTube videos",
             f"**Videos analyzed:** {len(findings)}",
             "",
         ]
@@ -373,7 +374,7 @@ def research_youtube(
                 excerpt = finding.content[:1500].strip()
                 lines.append(excerpt + ("…" if len(finding.content) > 1500 else ""))
                 lines.append("")
-            meta = [f"source: youtube"]
+            meta = ["source: youtube"]
             if finding.fetched_at_utc:
                 meta.append(f"fetched: {finding.fetched_at_utc}")
             if finding.content_hash:

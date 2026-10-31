@@ -8,9 +8,6 @@ from __future__ import annotations
 
 import base64
 import logging
-import tempfile
-from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +39,7 @@ class VisionEngine:
     def is_available(self) -> bool:
         return self._check()
 
-    def analyze(self, image_path: str, prompt: str = "Describe this image in detail") -> Optional[str]:
+    def analyze(self, image_path: str, prompt: str = "Describe this image in detail") -> str | None:
         """Send an image to Ollama vision model and return the analysis."""
         if not self._check():
             return None
@@ -68,7 +65,7 @@ class VisionEngine:
             logger.warning("Vision analysis failed: %s", exc)
             return None
 
-    def describe(self, image_path: str) -> Optional[str]:
+    def describe(self, image_path: str) -> str | None:
         return self.analyze(image_path, "Describe this image in detail")
 
 

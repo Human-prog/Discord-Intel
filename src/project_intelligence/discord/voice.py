@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import discord
 from discord import app_commands
@@ -36,12 +36,11 @@ try:
 except ImportError:
     VISION_AVAILABLE = False
 
-from project_intelligence.config import Settings, load_settings
+from project_intelligence.config import Settings
 from project_intelligence.security import (
     AuthContext,
     AuthorizationError,
     make_checker,
-    rate_limiter,
 )
 
 logger = logging.getLogger(__name__)
@@ -94,14 +93,14 @@ class VoiceManager:
             return True
         return False
 
-    def get_state(self, guild_id: int) -> Optional[VoiceState]:
+    def get_state(self, guild_id: int) -> VoiceState | None:
         return self.voice_states.get(guild_id)
 
     def is_connected(self, guild_id: int) -> bool:
         state = self.get_state(guild_id)
         return state is not None and state.voice_client.is_connected()
 
-    def get_channel_name(self, guild_id: int) -> Optional[str]:
+    def get_channel_name(self, guild_id: int) -> str | None:
         state = self.get_state(guild_id)
         if state and state.voice_client.is_connected():
             return f"VoiceChannel({state.channel_id})"
@@ -422,7 +421,10 @@ def register_voice_commands(bot: discord.Client) -> None:
             await voice_manager.leave(guild)
         # Join the user's channel
         await voice_manager.join(guild, channel)
-        await _reply(interaction, f"🎙️ Listening for {duration}s... (placeholder - actual audio capture not yet available)")
+        await _reply(
+            interaction,
+            f"🎙️ Listening for {duration}s... (placeholder — audio capture not yet available)",
+        )
         # Simulate listening (placeholder)
         await asyncio.sleep(min(duration, 120))
         await _reply(interaction, "✅ Listening complete. (Simulation)")
@@ -447,7 +449,11 @@ def register_voice_commands(bot: discord.Client) -> None:
     @bot.tree.command(name="vision", description="Describe or analyze an image")
     @app_commands.describe(image_url="Publicly accessible image URL")
     @app_commands.describe(prompt="What to ask about the image (default: describe)")
-    async def vision_command(interaction: discord.Interaction, image_url: str, prompt: str = "Describe this image in detail") -> None:
+    async def vision_command(
+        interaction: discord.Interaction,
+        image_url: str,
+        prompt: str = "Describe this image in detail",
+    ) -> None:
         auth_ctx, settings = _get_context(interaction)
         if auth_ctx is None or settings is None:
             await _reply(interaction, "Authentication required.")
@@ -534,4 +540,8 @@ def register_voice_commands(bot: discord.Client) -> None:
 
     @bot.tree.command(name="denv-config", description="Show `/etc/dpi/.env` settings")
     async def cmd_denv_config(interaction: discord.Interaction) -> None:
-        await _reply(interaction, "⚙️ `.env` config: `APP_ENV=production`, `OLLAMA_MODEL=llama3:8b`, `RESEARCH_API_KEY` set, `DISCORD_BOT_TOKEN` present.")
+        await _reply(
+            interaction,
+            "⚙️ `.env` config: `APP_ENV=production`, `OLLAMA_MODEL=llama3:8b`, "
+            "`RESEARCH_API_KEY` set, `DISCORD_BOT_TOKEN` present.",
+        )

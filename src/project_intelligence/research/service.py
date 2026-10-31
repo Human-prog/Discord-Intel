@@ -88,10 +88,7 @@ def _combine_reports(
     ]
     # If youtube_report passed as a list (notes), treat as notes; skip YouTube section
     if isinstance(youtube_report, list):
-        if notes is None:
-            notes = youtube_report
-        else:
-            notes = notes + youtube_report
+        notes = youtube_report if notes is None else notes + youtube_report
         youtube_report = None
 
     if notes:
@@ -209,11 +206,8 @@ def run_research(
         if normalized_scope == "youtube":
             try:
                 from project_intelligence.research.youtube import (
-                    YouTubeFetcher,
-                    extract_video_id,
                     is_youtube_url,
                     research_youtube,
-                    youtube_to_web_finding,
                 )
 
                 youtube_urls = []
@@ -306,7 +300,6 @@ def run_research(
         _store_local_sources(job.id, local_findings)
         _store_web_sources(job.id, web_findings)
         if YOUTUBE_AVAILABLE and normalized_scope == "youtube":
-            from project_intelligence.research.youtube import research_youtube as _research_youtube
 
             for finding in youtube_findings:
                 repo.upsert_research_source(

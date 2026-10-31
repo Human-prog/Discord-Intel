@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +26,8 @@ class ImageGenerator:
         if self._pipeline is not None:
             return self._available
         try:
-            from diffusers import StableDiffusionPipeline  # type: ignore
             import torch
+            from diffusers import StableDiffusionPipeline  # type: ignore
             self._pipeline = StableDiffusionPipeline.from_pretrained(
                 self.model_id,
                 torch_dtype=torch.float32,
@@ -47,7 +46,7 @@ class ImageGenerator:
     def is_available(self) -> bool:
         return self._load()
 
-    def generate(self, prompt: str, output_path: Optional[str] = None) -> Optional[str]:
+    def generate(self, prompt: str, output_path: str | None = None) -> str | None:
         """Generate an image from a text prompt and return the file path."""
         if not self._load():
             return None
