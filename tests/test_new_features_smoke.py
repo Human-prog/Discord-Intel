@@ -1,5 +1,4 @@
 """Smoke tests for new feature modules (Phase 27+)."""
-import pytest
 
 
 def test_image_gen_imports() -> None:

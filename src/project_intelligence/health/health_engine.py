@@ -170,9 +170,9 @@ def check_project_health(
 
     # Phase 27+ feature modules
     try:
-        from project_intelligence.discord.voice import VOICE_SPEECH_AVAILABLE
         from project_intelligence.discord.image_gen import IMAGE_GEN_AVAILABLE
         from project_intelligence.discord.vision import VISION_AVAILABLE
+        from project_intelligence.discord.voice import VOICE_SPEECH_AVAILABLE
         result["new_modules"] = {
             "voice": VOICE_SPEECH_AVAILABLE,
             "image_gen": IMAGE_GEN_AVAILABLE,
