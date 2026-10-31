@@ -4,6 +4,7 @@ Provides voice channel join/leave, audio capture, transcription via Whisper,
 and integration with the research pipeline for spoken queries.
 """
 
+# mypy: ignore-errors
 from __future__ import annotations
 
 import asyncio

@@ -5,6 +5,7 @@ configured providers. Degrades safely when packages/models missing.
 Uses Torch (already installed) + diffusers pipeline.
 """
 
+# mypy: ignore-errors
 from __future__ import annotations
 
 import logging

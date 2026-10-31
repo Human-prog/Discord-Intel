@@ -27,7 +27,7 @@ class VisionEngine:
 
             settings = load_settings()
             self._base_url = settings.ollama_base_url
-            self._timeout = settings.ollama_timeout_second
+            self._timeout = settings.ollama_timeout_seconds
             import httpx
 
             self._httpx = httpx

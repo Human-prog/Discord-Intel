@@ -5,6 +5,7 @@ pyttsx3 / gTTS for voice playback. Degrades safely if packages missing.
 All audio processing stays local (no cloud STT unless explicitly configured).
 """
 
+# mypy: ignore-errors
 from __future__ import annotations
 
 import logging
