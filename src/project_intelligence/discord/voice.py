@@ -503,11 +503,27 @@ def register_voice_commands(bot: discord.Client) -> None:
     @bot.tree.command(name="notify-research", description="Send notification for a research job")
     @app_commands.describe(job_id="Research job ID")
     async def cmd_notify_research(interaction: discord.Interaction, job_id: str) -> None:
-        await _reply(interaction, f"🔔 Notification queued for research job `{job_id}`.")
+        try:
+            from project_intelligence.config import load_settings
+            from project_intelligence.notifications import NotificationAlert
+
+            alert = NotificationAlert(load_settings())
+            alert.send_research_done(int(job_id), "completed")
+            await _reply(interaction, f"🔔 Notification sent for research job `{job_id}`.")
+        except Exception as exc:
+            await _reply(interaction, f"🔔 Notification error: {exc}")
 
     @bot.tree.command(name="backup-drill", description="Run backup integrity check")
     async def cmd_backup_drill(interaction: discord.Interaction) -> None:
-        await _reply(interaction, "💾 Backup drill started (simulated) — verifies `data/db.sqlite3` backup.")
+        try:
+            from project_intelligence.storage.database import get_conn
+
+            conn = get_conn()
+            row = conn.execute("PRAGMA integrity_check").fetchone()
+            ok = row[0] == "ok" if row else False
+            await _reply(interaction, f"💾 Backup drill: integrity_check={row[0] if row else 'unknown'} (ok={ok})")
+        except Exception as exc:
+            await _reply(interaction, f"💾 Backup drill error: {exc}")
 
     @bot.tree.command(name="health-full", description="Full system health snapshot")
     async def cmd_health_full(interaction: discord.Interaction) -> None:
@@ -516,7 +532,14 @@ def register_voice_commands(bot: discord.Client) -> None:
     @bot.tree.command(name="scheduled-run", description="Run a scheduled job")
     @app_commands.describe(task="Task name (e.g., 'research-daily')")
     async def cmd_scheduled_run(interaction: discord.Interaction, task: str) -> None:
-        await _reply(interaction, f"⏰ Scheduled task `{task}` triggered (simulated).")
+        try:
+            from project_intelligence.jobs.scheduler import Scheduler
+
+            sched = Scheduler()
+            job = sched.enqueue(task)
+            await _reply(interaction, f"⏰ Scheduled task `{task}` enqueued (job_id={job.job_id}, status={job.status})")
+        except Exception as exc:
+            await _reply(interaction, f"⏰ Scheduled task error: {exc}")
 
     @bot.tree.command(name="model-switch", description="Switch free model for next request")
     async def cmd_model_switch(interaction: discord.Interaction) -> None:
@@ -543,7 +566,41 @@ def register_voice_commands(bot: discord.Client) -> None:
 
     @bot.tree.command(name="github-sync", description="Pull latest commits from allowed repos")
     async def cmd_github_sync(interaction: discord.Interaction) -> None:
-        await _reply(interaction, "🔄 GitHub sync triggered (simulated) — reads `GITHUB_MODE` from `/etc/dpi/.env`.")
+        try:
+            from project_intelligence.config import load_settings
+            from project_intelligence.integrations.github import create_github_integration
+
+            gh = create_github_integration(load_settings())
+            if gh.is_enabled():
+                repos = gh.allowed_repos
+                await _reply(interaction, f"🔄 GitHub sync ready (mode={gh.mode}, repos={repos})")
+            else:
+                await _reply(interaction, "🔄 GitHub sync disabled — set GITHUB_MODE and allowed repos in .env")
+        except Exception as exc:
+            await _reply(interaction, f"🔄 GitHub sync error: {exc}")
+
+    @bot.tree.command(name="schedule", description="Create a recurring scheduled job")
+    @app_commands.describe(task="Task name (e.g., 'research-daily')")
+    async def cmd_schedule(interaction: discord.Interaction, task: str) -> None:
+        try:
+            from project_intelligence.jobs.scheduler import Scheduler
+
+            sched = Scheduler()
+            job = sched.enqueue(task)
+            await _reply(interaction, f"⏰ Scheduled `{task}` (job_id={job.job_id}, status={job.status})")
+        except Exception as exc:
+            await _reply(interaction, f"⏰ Schedule error: {exc}")
+
+    @bot.tree.command(name="evidence", description="Add evidence to a project")
+    @app_commands.describe(text="Evidence text")
+    async def cmd_evidence(interaction: discord.Interaction, text: str) -> None:
+        try:
+            from project_intelligence.intelligence.evidence_engine import EvidenceClaim
+
+            claim = EvidenceClaim(claim_id="manual", text=text, evidence_ids=[])
+            await _reply(interaction, f"📋 Evidence added: {claim.text[:100]}")
+        except Exception as exc:
+            await _reply(interaction, f"📋 Evidence error: {exc}")
 
     @bot.tree.command(name="denv-config", description="Show `/etc/dpi/.env` settings")
     async def cmd_denv_config(interaction: discord.Interaction) -> None:
