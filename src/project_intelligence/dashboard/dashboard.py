@@ -410,6 +410,20 @@ async def api_health(settings: Settings = Depends(get_settings)) -> DashboardHea
     except Exception:  # pragma: no cover - catastrophic DB failure
         database_healthy = False
 
+    new_modules = {"voice": False, "image_gen": False, "vision": False}
+    try:
+        from project_intelligence.discord.image_gen import IMAGE_GEN_AVAILABLE
+        from project_intelligence.discord.vision import VISION_AVAILABLE
+        from project_intelligence.discord.voice import VOICE_SPEECH_AVAILABLE
+
+        new_modules = {
+            "voice": VOICE_SPEECH_AVAILABLE,
+            "image_gen": IMAGE_GEN_AVAILABLE,
+            "vision": VISION_AVAILABLE,
+        }
+    except Exception as exc:  # pragma: no cover - import failure
+        logger.debug("import failed: %s", exc)
+
     return DashboardHealth(
         app_env=settings.app_env,
         app_log_level=settings.app_log_level,
@@ -421,6 +435,7 @@ async def api_health(settings: Settings = Depends(get_settings)) -> DashboardHea
             settings.research_provider in {"tavily", "brave"} and settings.research_api_key is not None
         ),
         uptime_seconds=round(time.monotonic() - _STARTED_AT, 3),
+        new_modules=new_modules,
     )
 
 

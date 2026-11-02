@@ -108,6 +108,7 @@ class DashboardHealth(BaseModel):
     ollama_configured: bool
     research_configured: bool
     uptime_seconds: float | None = None
+    new_modules: dict[str, bool] = Field(default_factory=dict)
 
     model_config = {
         "json_schema_extra": {
