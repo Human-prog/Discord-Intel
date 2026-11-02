@@ -439,9 +439,22 @@ async def api_health(settings: Settings = Depends(get_settings)) -> DashboardHea
     )
 
 
-# ---------------------------------------------------------------------------
-# --- Project listing & detail ---
-# ---------------------------------------------------------------------------
+@app.get("/health/modules", response_model=dict[str, bool])
+async def api_health_modules(settings: Settings = Depends(get_settings)) -> dict[str, bool]:
+    """Health status for Phase 27+ feature modules."""
+    modules = {"voice": False, "image_gen": False, "vision": False}
+    try:
+        from project_intelligence.discord.voice import VOICE_SPEECH_AVAILABLE
+        from project_intelligence.discord.image_gen import IMAGE_GEN_AVAILABLE
+        from project_intelligence.discord.vision import VISION_AVAILABLE
+        modules = {
+            "voice": VOICE_SPEECH_AVAILABLE,
+            "image_gen": IMAGE_GEN_AVAILABLE,
+            "vision": VISION_AVAILABLE,
+        }
+    except Exception as exc:  # pragma: no cover - import failure
+        logger.debug("module import failed: %s", exc)
+    return modules
 
 
 @app.get(

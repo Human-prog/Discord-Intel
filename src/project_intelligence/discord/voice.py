@@ -494,11 +494,42 @@ def register_voice_commands(bot: discord.Client) -> None:
 
     @bot.tree.command(name="research-deep", description="Deep multi-step research with citations")
     async def cmd_research_deep(interaction: discord.Interaction) -> None:
-        await _reply(interaction, "🔍 Deep research started (simulated). Use `/research scope:local` for quick mode.")
+        try:
+            from project_intelligence.config import load_settings
+            from project_intelligence.research.service import run_research
+
+            result = run_research("deep research", scope="both", settings=load_settings())
+            await _reply(
+                interaction, f"🔍 Deep research complete (job_id={result.job_id}, sources={result.source_count})"
+            )
+        except Exception as exc:
+            await _reply(interaction, f"🔍 Deep research error: {exc}")
 
     @bot.tree.command(name="catalog-rescan", description="Rescan project directories")
     async def cmd_catalog_rescan(interaction: discord.Interaction) -> None:
-        await _reply(interaction, "📂 Catalog rescan triggered (simulated) — checks `/opt/dpi/app`.")
+        try:
+            import subprocess
+            import sys
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "scripts/catalog_projects.py",
+                    "--root",
+                    "/opt/dpi/app",
+                    "--output",
+                    "/tmp/catalog.json",  # noqa: S108
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if proc.returncode == 0:
+                await _reply(interaction, "📂 Catalog rescan complete — catalog.json written")
+            else:
+                await _reply(interaction, f"📂 Catalog rescan failed: {proc.stderr[:200]}")
+        except Exception as exc:
+            await _reply(interaction, f"📂 Catalog rescan error: {exc}")
 
     @bot.tree.command(name="notify-research", description="Send notification for a research job")
     @app_commands.describe(job_id="Research job ID")
