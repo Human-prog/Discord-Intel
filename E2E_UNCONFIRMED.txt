@@ -1,0 +1,4 @@
+Live Discord end-to-end test (voice-join → voice-ask → generate-image → vision) is UNCONFIRMED.
+Bot 56677 running on home3013 with all dependencies installed; commands registered.
+No guild/channel interaction has been verified yet.
+All CI gates pass (ruff, format, mypy, 515 tests, 82% coverage > 80% gate).
