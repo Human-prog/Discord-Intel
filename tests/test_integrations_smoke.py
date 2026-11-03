@@ -1,8 +1,9 @@
 """Smoke tests for new integrations and commands (Phase 28+)."""
-from project_intelligence.integrations.github import create_github_integration
+
 from project_intelligence.config import load_settings
-from project_intelligence.jobs.scheduler import Scheduler
+from project_intelligence.integrations.github import create_github_integration
 from project_intelligence.intelligence.evidence_engine import EvidenceClaim
+from project_intelligence.jobs.scheduler import Scheduler
 
 
 def test_github_integration_imports() -> None:

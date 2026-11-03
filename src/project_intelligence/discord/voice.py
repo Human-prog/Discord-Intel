@@ -494,19 +494,22 @@ def register_voice_commands(bot: discord.Client) -> None:
 
     @bot.tree.command(name="research-deep", description="Deep multi-step research with citations")
     async def cmd_research_deep(interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
         try:
             from project_intelligence.config import load_settings
             from project_intelligence.research.service import run_research
 
             result = run_research("deep research", scope="both", settings=load_settings())
-            await _reply(
-                interaction, f"🔍 Deep research complete (job_id={result.job_id}, sources={result.source_count})"
+            await interaction.followup.send(
+                f"🔍 Deep research complete (job_id={result.job_id}, sources={result.source_count})",
+                ephemeral=True,
             )
         except Exception as exc:
-            await _reply(interaction, f"🔍 Deep research error: {exc}")
+            await interaction.followup.send(f"🔍 Deep research error: {exc}", ephemeral=True)
 
     @bot.tree.command(name="catalog-rescan", description="Rescan project directories")
     async def cmd_catalog_rescan(interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
         try:
             import subprocess
             import sys
@@ -525,24 +528,25 @@ def register_voice_commands(bot: discord.Client) -> None:
                 timeout=60,
             )
             if proc.returncode == 0:
-                await _reply(interaction, "📂 Catalog rescan complete — catalog.json written")
+                await interaction.followup.send("📂 Catalog rescan complete — catalog.json written", ephemeral=True)
             else:
-                await _reply(interaction, f"📂 Catalog rescan failed: {proc.stderr[:200]}")
+                await interaction.followup.send(f"📂 Catalog rescan failed: {proc.stderr[:200]}", ephemeral=True)
         except Exception as exc:
-            await _reply(interaction, f"📂 Catalog rescan error: {exc}")
+            await interaction.followup.send(f"📂 Catalog rescan error: {exc}", ephemeral=True)
 
     @bot.tree.command(name="notify-research", description="Send notification for a research job")
     @app_commands.describe(job_id="Research job ID")
     async def cmd_notify_research(interaction: discord.Interaction, job_id: str) -> None:
+        await interaction.response.defer(ephemeral=True)
         try:
             from project_intelligence.config import load_settings
             from project_intelligence.notifications import NotificationAlert
 
             alert = NotificationAlert(load_settings())
             alert.send_research_done(int(job_id), "completed")
-            await _reply(interaction, f"🔔 Notification sent for research job `{job_id}`.")
+            await interaction.followup.send(f"🔔 Notification sent for research job `{job_id}`.", ephemeral=True)
         except Exception as exc:
-            await _reply(interaction, f"🔔 Notification error: {exc}")
+            await interaction.followup.send(f"🔔 Notification error: {exc}", ephemeral=True)
 
     @bot.tree.command(name="backup-drill", description="Run backup integrity check")
     async def cmd_backup_drill(interaction: discord.Interaction) -> None:
@@ -563,14 +567,18 @@ def register_voice_commands(bot: discord.Client) -> None:
     @bot.tree.command(name="scheduled-run", description="Run a scheduled job")
     @app_commands.describe(task="Task name (e.g., 'research-daily')")
     async def cmd_scheduled_run(interaction: discord.Interaction, task: str) -> None:
+        await interaction.response.defer(ephemeral=True)
         try:
             from project_intelligence.jobs.scheduler import Scheduler
 
             sched = Scheduler()
             job = sched.enqueue(task)
-            await _reply(interaction, f"⏰ Scheduled task `{task}` enqueued (job_id={job.job_id}, status={job.status})")
+            await interaction.followup.send(
+                f"⏰ Scheduled task `{task}` enqueued (job_id={job.job_id}, status={job.status})",
+                ephemeral=True,
+            )
         except Exception as exc:
-            await _reply(interaction, f"⏰ Scheduled task error: {exc}")
+            await interaction.followup.send(f"⏰ Scheduled task error: {exc}", ephemeral=True)
 
     @bot.tree.command(name="model-switch", description="Switch free model for next request")
     async def cmd_model_switch(interaction: discord.Interaction) -> None:
