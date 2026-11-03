@@ -11,9 +11,8 @@ Private, self-hosted project-intelligence system for a personal Ubuntu homelab. 
 |---|---|
 | Working name | `discord-project-intelligence` |
 | GitHub remote (`origin`) | `https://github.com/Human-prog/Discord-Intel` (private) |
-| Local development path | `C:\Users\Arega\Desktop\Projects\Discord Project Intelligence` |
-| Deployment target | Ubuntu homelab `home3013` — LAN `192.168.1.186`, tailnet `100.72.17.90`, service account `dpi` |
-| Dashboard | `http://127.0.0.1:8765` on the host; `https://home3013.tail53635c.ts.net` on the tailnet |
+| Dashboard | `http://127.0.0.1:8765` on the host; tailnet URL configured via `DASHBOARD_PUBLIC_URL` |
+
 
 ## Security posture (project non-negotiables)
 
@@ -42,7 +41,7 @@ Private, self-hosted project-intelligence system for a personal Ubuntu homelab. 
 The dashboard is served from the homelab and is never exposed publicly:
 
 - Local health check: `curl http://127.0.0.1:8765/health`
-- Tailnet URL: `https://home3013.tail53635c.ts.net` (Tailscale Serve → `127.0.0.1:8765`)
+- Tailnet URL: configured via `DASHBOARD_PUBLIC_URL` (Tailscale Serve → `127.0.0.1:8765`)
 - Sign in with the owner session secret stored at `/etc/dpi/session_secret` (mode `0640`, `root:dpi`).
 - Use the **Projects** tab for catalog status, technology, work history, and recent research; use **Research** for cited reports and source details.
 - Discord `/research` links to the dashboard at `DASHBOARD_PUBLIC_URL#research-<job_id>`; set that variable to the tailnet URL, never a public one.

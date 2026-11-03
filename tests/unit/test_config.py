@@ -410,10 +410,7 @@ def test_research_provider_is_normalized_and_validated(make_settings):
 def test_dashboard_public_url_is_normalized_and_validated(make_settings):
     assert make_settings(dashboard_public_url=None).dashboard_public_url is None
     assert make_settings(dashboard_public_url="").dashboard_public_url is None
-    assert (
-        make_settings(dashboard_public_url="https://home3013.tail53635c.ts.net/").dashboard_public_url
-        == "https://home3013.tail53635c.ts.net"
-    )
+    assert make_settings(dashboard_public_url="https://example.com/").dashboard_public_url == "https://example.com"
     with pytest.raises(ValidationError, match="absolute HTTP"):
         make_settings(dashboard_public_url="ftp://example.com")
     with pytest.raises(ValidationError, match="absolute HTTP"):

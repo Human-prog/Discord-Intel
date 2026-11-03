@@ -37,7 +37,7 @@ DISCORD_ALLOWED_GUILD_IDS=
 DISCORD_ALLOWED_CHANNEL_IDS=
 DISCORD_ALLOW_DMS=false
 PROJECT_ALLOWED_ROOTS=/opt/dpi/app
-DASHBOARD_PUBLIC_URL=https://home3013.tail53635c.ts.net
+DASHBOARD_PUBLIC_URL=https://your-tailnet-url.example.com
 RESEARCH_API_KEY=
 EOF
 chmod 640 /etc/dpi/.env
@@ -64,7 +64,7 @@ print('Torch: OK')
 "
 
 # Health check
-curl -fsS http://127.0.0.1:8765/health 2>/dev/null || curl -fsS https://home3013.tail53635c.ts.net/health 2>/dev/null || echo "Health check: verify manually"
+curl -fsS http://127.0.0.1:8765/health 2>/dev/null || curl -fsS https://your-tailnet-url.example.com/health 2>/dev/null || echo "Health check: verify manually"
 
 echo "=== Portable install complete. All 13 commands + voice/image/vision available. ==="
 echo "Search: discord-voice-bot stt tts image-generation vision-ollama rotation health-backup"

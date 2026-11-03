@@ -2,7 +2,7 @@
 
 Search keywords: `discord-voice-bot`, `stt-tts-whisper`, `pyttsx3-voice`, `image-generation-stable-diffusion`, `vision-analysis-ollama`, `free-model-rotation`, `discord-bot-health-backup`, `discord-research-pipeline`, `discord-voice-join-leave`, `discord-schedule-research`, `discord-project-intelligence-install`
 
-## Quick install (Linux server / home3013)
+# Quick install (Linux server / homelab)
 
 ```bash
 sudo bash install-voice-image.sh
@@ -26,7 +26,7 @@ systemctl restart discord-project-intelligence-bot discord-project-intelligence
 
 ## Health endpoint
 
-`https://home3013.tail53635c.ts.net/health` or `http://127.0.0.1:8765/health`
+`https://your-tailnet-url.example.com/health` or `http://127.0.0.1:8765/health`
 
 ## Source
 
